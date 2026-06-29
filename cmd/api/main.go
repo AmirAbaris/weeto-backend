@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/AmirAbaris/weeto-backend/internal/config"
+	"github.com/AmirAbaris/weeto-backend/internal/db"
 	"github.com/AmirAbaris/weeto-backend/internal/handler/health"
 	"github.com/joho/godotenv"
 )
@@ -26,6 +27,16 @@ func main() {
 		slog.Error("config", "err", err)
 		os.Exit(1)
 	}
+
+	ctx := context.Background()
+
+	pool, err := db.NewPool(ctx, cfg.DBURL)
+	if err != nil {
+		slog.Error("db", "err", err)
+		os.Exit(1)
+	}
+	defer pool.Close()
+	_ = pool // remove once you pass it to handlers / sqlc.Queries
 
 	healthHandler := health.NewHandler()
 
@@ -49,9 +60,9 @@ func main() {
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	<-stop
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := server.Shutdown(ctx); err != nil {
+	if err := server.Shutdown(shutdownCtx); err != nil {
 		slog.Error("shutdown", "err", err)
 	}
 }
