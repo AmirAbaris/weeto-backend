@@ -1,4 +1,4 @@
-# Weeto PRD v1.3
+# Weeto PRD v1.4
 
 **Status:** Ready for implementation  
 **Tagline:** Schedule interviews, not messages.
@@ -31,9 +31,9 @@ The product makes hiring teams look professional by default, with cal.com-level 
 
 ### Recruiter — account & organization
 
-1. As a recruiter, I want to sign up with email and password, so that I can create a Weeto account without relying on Google.
-2. As a recruiter, I want to sign up or log in with Google (Gmail), so that I can onboard quickly using an account I already have.
-3. As a recruiter, I want to connect my Google account after signup, so that Weeto can create calendar events and Meet links on my behalf.
+1. As a recruiter, I want to sign up with email and password, so that I can create a Weeto account with a familiar login flow.
+2. As a recruiter, I want to log in with email and password, so that I can access my dashboard securely.
+3. As a recruiter, I want to connect my Google account after signup (optional), so that Weeto can create calendar events and Meet links on my behalf.
 4. As a recruiter, I want to create an organization, so that my booking pages are branded under my company name.
 5. As a recruiter, I want to see a clear prompt to connect Google when I create a Google Meet interview type without a connected account, so that I know what to do before sharing a link.
 
@@ -119,8 +119,8 @@ The product makes hiring teams look professional by default, with cal.com-level 
 - **Schema & migrations:** SQL migration files (`goose` or `golang-migrate`) — source of truth for the database schema.
 - **Go data access:** `sqlc` generates type-safe Go code from hand-written SQL queries; `pgx` as the PostgreSQL driver. No Prisma.
 - **Background jobs:** Notification outbox table processed by a Go worker (Redis queue optional).
-- **Auth:** Email/password signup and login; Google OAuth for Gmail signup and login.
-- **Google integration:** Recruiter's OAuth refresh token (encrypted at rest) used for Google Calendar API event creation with Meet conference data.
+- **Auth:** Email/password signup and login only; JWT access tokens with refresh-token rotation (stored hashed in PostgreSQL). No Google signup or login in v1.
+- **Google integration (week 3+):** Optional “connect Google” OAuth flow for authenticated recruiters only. Refresh token (encrypted at rest) used for Google Calendar API event creation with Meet conference data.
 - **SMS:** Kavenegar or Melipayamak (provider to be selected based on per-SMS cost and API quality).
 - **Email:** SMTP or transactional email provider for confirmations and reminders.
 - **Payments (v1.1):** Zarinpal one-time monthly payment activating Pro for 30 days; renewal reminder email on day 25. No complex subscription engine in v1.
@@ -146,12 +146,13 @@ POST /public/{orgSlug}/{typeSlug}/book    → create booking (concurrency-safe)
 Recruiter dashboard, notifications, Meet creation, and SMS all hang off a successful booking transaction. This is the single highest seam for end-to-end testing and vertical slice delivery.
 
 Secondary seams:
-- **Auth seam:** register, login, Google OAuth callback, token refresh.
+- **Auth seam:** register, login, token refresh, logout.
+- **Google connect seam (week 3):** authenticated OAuth callback stores Calendar refresh token; not used for identity.
 - **Notification outbox seam:** enqueue on booking events; worker delivers email/SMS.
 
 ### Domain model (core entities)
 
-- **User** — recruiter account; optional email/password; optional `google_id`; encrypted `google_refresh_token`.
+- **User** — recruiter account; `email` + `password_hash` (required for auth); optional `google_id` and encrypted `google_refresh_token` after explicit Google connect (Calendar/Meet only).
 - **Organization** — company workspace; slug for public URLs; plan tier and usage counters (`meet_links_used`, `sms_used`, `plan_expires_at`).
 - **InterviewType** — title, slug, duration, buffer, meeting provider (`google_meet` | `bale_link` | `custom_url`), optional static meeting URL for non-Google providers.
 - **AvailabilityRule** — working hours, breaks, max interviews per day, manual time-off blocks.
@@ -176,14 +177,15 @@ Alternative: `UNIQUE(slot_id)` on bookings and handle duplicate key as 409 Confl
 - Frontend converts to `Asia/Tehran` and displays Jalali dates with Persian day names and numerals.
 - Jalali conversion is a frontend concern; the API remains timezone-agnostic.
 
-### Google OAuth dual purpose
+### Google account connection (Calendar & Meet only)
 
-A single Google OAuth connection serves both authentication and Calendar/Meet integration:
+Google OAuth is **not** used for signup or login. Recruiters always authenticate with email and password. Google is an optional integration connected from the dashboard.
 
-- On OAuth callback: create or find user, store encrypted refresh token.
+- `GET /integrations/google/connect` (authenticated) redirects to Google with Calendar scopes.
+- On callback: store encrypted refresh token on the logged-in user; set `google_connected_at`.
 - On booking (provider = `google_meet`): use recruiter's token to create Calendar event with `conferenceData` for Meet link; save `meet_link` and `calendar_event_id` on booking.
-- Token refresh handled in worker or on 401 with short-lived access token cache in Redis.
-- Interview types with `google_meet` require a connected Google account; show connect CTA otherwise. Email/password users can sign up first and connect Google as a second step.
+- Google access-token refresh handled in worker or on 401 with short-lived access token cache in Redis.
+- Interview types with `google_meet` require a connected Google account; show connect CTA otherwise. Recruiters can use Bale/custom URL meeting types without ever connecting Google.
 
 ### Meeting providers
 
@@ -222,10 +224,12 @@ SMS is plan-limited. Email is unlimited on all plans.
 **Auth**
 - `POST /auth/register`
 - `POST /auth/login`
-- `GET  /auth/google` (redirect)
-- `GET  /auth/google/callback`
+- `POST /auth/refresh`
+- `POST /auth/logout`
 
 **Recruiter (authenticated)**
+- `GET  /integrations/google/connect` (redirect; week 3)
+- `GET  /integrations/google/callback` (week 3)
 - `POST /organizations`
 - `GET  /organizations/:id`
 - `POST /interview-types`
@@ -248,9 +252,9 @@ SMS is plan-limited. Email is unlimited on all plans.
 
 | Week | Deliverable |
 |------|-------------|
-| 1 | SQL migrations, sqlc setup, Go HTTP server, auth (email + Google OAuth), org + interview type CRUD, slot generation |
+| 1 | SQL migrations, sqlc setup, Go HTTP server, auth (email/password + JWT refresh), org + interview type CRUD, slot generation |
 | 2 | Public slot listing and booking with concurrency lock; booking list for recruiter |
-| 3 | Google Calendar/Meet on book; email notifications via outbox worker |
+| 3 | Google connect flow + Calendar/Meet on book; email notifications via outbox worker |
 | 4 | SMS (confirm + 24h reminder); reschedule/cancel magic links |
 | 5 | Next.js booking page (Jalali, RTL) and recruiter dashboard shell |
 
@@ -327,6 +331,7 @@ Greenfield project — no existing test patterns. Establish integration test set
 - Video interviewing within Weeto
 - Payroll, HR management, performance reviews
 - Enterprise SSO
+- Google OAuth signup/login (“Sign in with Google”)
 - Candidate accounts or login
 - Jalali/Gregorian toggle (Jalali default only in v1; toggle is nice-to-have)
 
