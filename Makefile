@@ -1,22 +1,32 @@
-.PHONY: help migrate-up migrate-down migrate-create sqlc test integration-test
+.PHONY: help migrate-up migrate-down migrate-create migrate-status sqlc test integration-test
+
+-include .env
+export
+
+DB_URL ?= postgres://amirabaris@localhost:5432/weeto?sslmode=disable
 
 help:
 	@echo "Targets:"
 	@echo "  migrate-up        Apply pending migrations"
 	@echo "  migrate-down      Roll back last migration"
 	@echo "  migrate-create    Create a new migration file (NAME=...)"
+	@echo "  migrate-status    Show migration status"
 	@echo "  sqlc              Regenerate internal/db from db/queries"
 	@echo "  test              Run unit tests"
 	@echo "  integration-test  Run integration tests (requires test DB)"
 
 migrate-up:
-	@echo "TODO: wire goose or golang-migrate"
+	goose -dir db/migrations postgres "$(DB_URL)" up
 
 migrate-down:
-	@echo "TODO: wire goose or golang-migrate"
+	goose -dir db/migrations postgres "$(DB_URL)" down
 
 migrate-create:
-	@echo "TODO: wire goose or golang-migrate (NAME=$(NAME))"
+	@test -n "$(NAME)" || (echo "usage: make migrate-create NAME=add_users" && exit 1)
+	goose -dir db/migrations create $(NAME) sql
+
+migrate-status:
+	goose -dir db/migrations postgres "$(DB_URL)" status
 
 sqlc:
 	sqlc generate
