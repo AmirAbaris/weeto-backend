@@ -1,0 +1,57 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/AmirAbaris/weeto-backend/internal/config"
+	"github.com/AmirAbaris/weeto-backend/internal/handler/health"
+	"github.com/joho/godotenv"
+)
+
+func main() {
+	_ = godotenv.Load() // ignore error in prod where .env doesnt exists
+
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
+
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		slog.Error("config", "err", err)
+		os.Exit(1)
+	}
+
+	healthHandler := health.NewHandler()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /health", healthHandler.Live)
+
+	server := &http.Server{
+		Addr:    ":" + cfg.Port,
+		Handler: mux,
+	}
+
+	go func() {
+		slog.Info("server starting", "port", cfg.Port, "env", cfg.Env)
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("server failed", "err", err)
+			os.Exit(1)
+		}
+	}()
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+	<-stop
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := server.Shutdown(ctx); err != nil {
+		slog.Error("shutdown", "err", err)
+	}
+}
