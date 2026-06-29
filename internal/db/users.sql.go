@@ -7,20 +7,29 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (email)
-VALUES ($1)
-RETURNING id, email, created_at, updated_at
+INSERT INTO users (email, password_hash)
+VALUES ($1, $2)
+RETURNING id, email, password_hash, last_login_at, created_at, updated_at
 `
 
-func (q *Queries) CreateUser(ctx context.Context, email string) (User, error) {
-	row := q.db.QueryRow(ctx, createUser, email)
+type CreateUserParams struct {
+	Email        string `json:"email"`
+	PasswordHash string `json:"password_hash"`
+}
+
+func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
+	row := q.db.QueryRow(ctx, createUser, arg.Email, arg.PasswordHash)
 	var i User
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
+		&i.PasswordHash,
+		&i.LastLoginAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -28,7 +37,7 @@ func (q *Queries) CreateUser(ctx context.Context, email string) (User, error) {
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, created_at, updated_at
+SELECT id, email, password_hash, last_login_at, created_at, updated_at
 FROM users
 WHERE email = $1
 `
@@ -39,8 +48,41 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
+		&i.PasswordHash,
+		&i.LastLoginAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const getUserByID = `-- name: GetUserByID :one
+SELECT id, email, password_hash, last_login_at, created_at, updated_at
+FROM users
+WHERE id = $1
+`
+
+func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByID, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.LastLoginAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const touchLastLogin = `-- name: TouchLastLogin :exec
+UPDATE users
+SET last_login_at = now(), updated_at = now()
+WHERE id = $1
+`
+
+func (q *Queries) TouchLastLogin(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, touchLastLogin, id)
+	return err
 }
