@@ -63,13 +63,16 @@ func RotateRefreshToken(
 	if err != nil {
 		return "", pgtype.UUID{}, ErrInvalidToken
 	}
-	if err := q.RevokeRefreshToken(ctx, row.ID); err != nil {
-		return "", pgtype.UUID{}, err
-	}
+
 	newRaw, err = CreateRefreshToken(ctx, q, row.UserID, ttl)
 	if err != nil {
 		return "", pgtype.UUID{}, err
 	}
+
+	if err := q.RevokeRefreshToken(ctx, row.ID); err != nil {
+		return "", pgtype.UUID{}, err
+	}
+
 	return newRaw, row.UserID, nil
 }
 
@@ -80,6 +83,7 @@ func RevokeRefreshTokenByRaw(ctx context.Context, q *db.Queries, rawToken string
 	}
 	return q.RevokeRefreshToken(ctx, row.ID)
 }
+
 func RevokeAllForUser(ctx context.Context, q *db.Queries, userID pgtype.UUID) error {
 	return q.RevokeAllUserRefreshTokens(ctx, userID)
 }

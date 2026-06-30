@@ -12,7 +12,9 @@ import (
 
 	"github.com/AmirAbaris/weeto-backend/internal/config"
 	"github.com/AmirAbaris/weeto-backend/internal/db"
+	authhandler "github.com/AmirAbaris/weeto-backend/internal/handler/auth"
 	"github.com/AmirAbaris/weeto-backend/internal/handler/health"
+	authsvc "github.com/AmirAbaris/weeto-backend/internal/service/auth"
 	"github.com/joho/godotenv"
 )
 
@@ -36,12 +38,19 @@ func main() {
 		os.Exit(1)
 	}
 	defer pool.Close()
-	_ = pool // remove once you pass it to handlers / sqlc.Queries
+
+	queries := db.New(pool)
 
 	healthHandler := health.NewHandler()
+	authService := authsvc.NewService(queries, cfg)
+	authHandler := authhandler.NewHandler(authService)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", healthHandler.Live)
+	mux.HandleFunc("POST /auth/register", authHandler.Register)
+	mux.HandleFunc("POST /auth/login", authHandler.Login)
+	mux.HandleFunc("POST /auth/refresh", authHandler.Refresh)
+	mux.HandleFunc("POST /auth/logout", authHandler.Logout)
 
 	server := &http.Server{
 		Addr:    ":" + cfg.Port,
