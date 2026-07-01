@@ -13,6 +13,7 @@ import (
 	"github.com/AmirAbaris/weeto-backend/internal/config"
 	"github.com/AmirAbaris/weeto-backend/internal/db"
 	authhandler "github.com/AmirAbaris/weeto-backend/internal/handler/auth"
+	docshandler "github.com/AmirAbaris/weeto-backend/internal/handler/docs"
 	"github.com/AmirAbaris/weeto-backend/internal/handler/health"
 	authsvc "github.com/AmirAbaris/weeto-backend/internal/service/auth"
 	"github.com/joho/godotenv"
@@ -42,10 +43,13 @@ func main() {
 	queries := db.New(pool)
 
 	healthHandler := health.NewHandler()
+	docsHandler := docshandler.NewHandler()
 	authService := authsvc.NewService(queries, cfg)
 	authHandler := authhandler.NewHandler(authService)
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /docs", docsHandler.UI)
+	mux.HandleFunc("GET /openapi.yaml", docsHandler.Spec)
 	mux.HandleFunc("GET /health", healthHandler.Live)
 	mux.HandleFunc("POST /auth/register", authHandler.Register)
 	mux.HandleFunc("POST /auth/login", authHandler.Login)

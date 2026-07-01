@@ -37,3 +37,5 @@ test/
 ## Docs
 
 Product requirements: [docs/PRD.md](docs/PRD.md)
+
+API reference (OpenAPI): [api/openapi.yaml](api/openapi.yaml). With the server running, open [http://localhost:8080/docs](http://localhost:8080/docs) for Swagger UI.
