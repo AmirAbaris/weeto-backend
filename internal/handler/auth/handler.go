@@ -21,15 +21,10 @@ type credentialsRequest struct {
 	Password string `json:"password"`
 }
 
-type refreshRequest struct {
-	RefreshToken string `json:"refresh_token"`
-}
-
 type tokenResponse struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	ExpiresIn    int    `json:"expires_in"`
-	TokenType    string `json:"token_type"`
+	AccessToken string `json:"access_token"`
+	ExpiresIn   int    `json:"expires_in"`
+	TokenType   string `json:"token_type"`
 }
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
@@ -44,6 +39,8 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, err)
 		return
 	}
+
+	setRefreshTokenCookie(w, pair)
 
 	httputil.WriteJSON(w, http.StatusCreated, toTokenResponse(pair))
 }
@@ -61,46 +58,71 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	setRefreshTokenCookie(w, pair)
+
 	httputil.WriteJSON(w, http.StatusOK, toTokenResponse(pair))
 }
 
 func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
-	var req refreshRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.WriteError(w, http.StatusBadRequest, "invalid request body")
+	cookie, err := r.Cookie("refresh_token")
+	if err != nil {
+		httputil.WriteError(w, http.StatusUnauthorized, "missing or invalid refresh token")
 		return
 	}
 
-	pair, err := h.svc.Refresh(r.Context(), req.RefreshToken)
+	pair, err := h.svc.Refresh(r.Context(), cookie.Value)
 	if err != nil {
 		writeServiceError(w, err)
 		return
 	}
 
+	setRefreshTokenCookie(w, pair)
+
 	httputil.WriteJSON(w, http.StatusOK, toTokenResponse(pair))
 }
 
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
-	var req refreshRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.WriteError(w, http.StatusBadRequest, "invalid request body")
+	cookie, err := r.Cookie("refresh_token")
+	if err != nil {
+		httputil.WriteError(w, http.StatusUnauthorized, "missing or invalid refresh token")
 		return
 	}
 
-	if err := h.svc.Logout(r.Context(), req.RefreshToken); err != nil {
+	if err := h.svc.Logout(r.Context(), cookie.Value); err != nil {
 		writeServiceError(w, err)
 		return
 	}
 
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    "",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+		Path:     "/",
+		MaxAge:   0,
+	})
+
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func setRefreshTokenCookie(w http.ResponseWriter, tokens authsvc.AuthTokens) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    tokens.RefreshToken,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+		Path:     "/",
+		MaxAge:   tokens.RefreshExpiresIn,
+	})
 }
 
 func toTokenResponse(tokens authsvc.AuthTokens) tokenResponse {
 	return tokenResponse{
-		AccessToken:  tokens.AccessToken,
-		RefreshToken: tokens.RefreshToken,
-		ExpiresIn:    tokens.ExpiresIn,
-		TokenType:    "Bearer",
+		AccessToken: tokens.AccessToken,
+		ExpiresIn:   tokens.ExpiresIn,
+		TokenType:   "Bearer",
 	}
 }
 

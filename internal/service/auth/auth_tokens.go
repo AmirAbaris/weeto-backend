@@ -10,9 +10,10 @@ import (
 
 // AuthTokens is the access + refresh token bundle returned on login/register/refresh.
 type AuthTokens struct {
-	AccessToken  string
-	RefreshToken string
-	ExpiresIn    int
+	AccessToken       string
+	RefreshToken      string
+	ExpiresIn         int // access token lifetime in seconds (OAuth expires_in)
+	RefreshExpiresIn  int // refresh token lifetime in seconds (cookie Max-Age)
 }
 
 func IssueAuthTokens(
@@ -33,8 +34,9 @@ func IssueAuthTokens(
 	}
 
 	return AuthTokens{
-		AccessToken:  access,
-		RefreshToken: refresh,
-		ExpiresIn:    int(accessTTL.Seconds()),
+		AccessToken:      access,
+		RefreshToken:     refresh,
+		ExpiresIn:        int(accessTTL.Seconds()),
+		RefreshExpiresIn: int(refreshTTL.Seconds()),
 	}, nil
 }

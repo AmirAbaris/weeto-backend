@@ -94,9 +94,10 @@ func (s *Service) Refresh(ctx context.Context, rawRefreshToken string) (AuthToke
 	}
 
 	return AuthTokens{
-		AccessToken:  access,
-		RefreshToken: newRaw,
-		ExpiresIn:    int(s.cfg.JWTAccessTTL.Seconds()),
+		AccessToken:      access,
+		RefreshToken:     newRaw,
+		ExpiresIn:        int(s.cfg.JWTAccessTTL.Seconds()),
+		RefreshExpiresIn: int(s.cfg.JWTRefreshTTL.Seconds()),
 	}, nil
 }
 
