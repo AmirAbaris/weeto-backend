@@ -1,4 +1,4 @@
-.PHONY: help migrate-up migrate-down migrate-create migrate-status sqlc test integration-test
+.PHONY: help dev migrate-up migrate-down migrate-create migrate-status sqlc test integration-test
 
 -include .env
 export
@@ -7,6 +7,7 @@ DB_URL ?= postgres://amirabaris@localhost:5432/weeto?sslmode=disable
 
 help:
 	@echo "Targets:"
+	@echo "  dev               Run API with hot reload (air)"
 	@echo "  migrate-up        Apply pending migrations"
 	@echo "  migrate-down      Roll back last migration"
 	@echo "  migrate-create    Create a new migration file (NAME=...)"
@@ -14,6 +15,9 @@ help:
 	@echo "  sqlc              Regenerate internal/db from db/queries"
 	@echo "  test              Run unit tests"
 	@echo "  integration-test  Run integration tests (requires test DB)"
+
+dev:
+	go run github.com/air-verse/air@latest
 
 migrate-up:
 	goose -dir db/migrations postgres "$(DB_URL)" up
