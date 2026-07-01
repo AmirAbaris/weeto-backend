@@ -7,7 +7,6 @@ CREATE TYPE plan_type AS ENUM (
     'business'
 );
 
-
 CREATE TABLE organization (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
@@ -17,7 +16,7 @@ CREATE TABLE organization (
     plan plan_type NOT NULL DEFAULT 'free',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-)
+);
 
 CREATE INDEX idx_org_slug ON organization(slug);
 CREATE INDEX idx_org_name ON organization(name);
