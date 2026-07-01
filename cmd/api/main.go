@@ -15,6 +15,8 @@ import (
 	authhandler "github.com/AmirAbaris/weeto-backend/internal/handler/auth"
 	docshandler "github.com/AmirAbaris/weeto-backend/internal/handler/docs"
 	"github.com/AmirAbaris/weeto-backend/internal/handler/health"
+	"github.com/AmirAbaris/weeto-backend/internal/middleware"
+	applogger "github.com/AmirAbaris/weeto-backend/internal/platform/logger"
 	authsvc "github.com/AmirAbaris/weeto-backend/internal/service/auth"
 	"github.com/joho/godotenv"
 )
@@ -22,14 +24,14 @@ import (
 func main() {
 	_ = godotenv.Load() // ignore error in prod where .env doesnt exists
 
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	slog.SetDefault(logger)
-
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		slog.Error("config", "err", err)
 		os.Exit(1)
 	}
+
+	logger := applogger.New(cfg.Env)
+	slog.SetDefault(logger)
 
 	ctx := context.Background()
 
@@ -56,9 +58,17 @@ func main() {
 	mux.HandleFunc("POST /auth/refresh", authHandler.Refresh)
 	mux.HandleFunc("POST /auth/logout", authHandler.Logout)
 
+	handler := middleware.RequestID(
+		middleware.Logging(logger, middleware.LoggingOptions{
+			SkipPaths: map[string]struct{}{
+				"/health": {},
+			},
+		})(mux),
+	)
+
 	server := &http.Server{
 		Addr:    ":" + cfg.Port,
-		Handler: mux,
+		Handler: handler,
 	}
 
 	go func() {
