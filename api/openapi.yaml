@@ -22,6 +22,8 @@ tags:
     description: Registration, login, and token lifecycle
   - name: Organizations
     description: Recruiter organization management
+  - name: InterviewTypes
+    description: Interview type configuration
 
 paths:
   /health:
@@ -310,6 +312,127 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /interview-types:
+    post:
+      tags: [InterviewTypes]
+      summary: Create an interview type
+      operationId: createInterviewType
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InterviewTypeRequest"
+      responses:
+        "201":
+          description: Interview type created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InterviewTypeResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Free plan interview type limit reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDetail"
+        "404":
+          description: Organization required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Slug already taken within organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Google account not connected for google_meet provider
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDetail"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    get:
+      tags: [InterviewTypes]
+      summary: List interview types for the authenticated user's organization
+      operationId: listInterviewTypes
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Interview types found
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InterviewTypeResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Organization required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /interview-types/{id}:
+    parameters:
+      - $ref: "#/components/parameters/InterviewTypeID"
+    put:
+      tags: [InterviewTypes]
+      summary: Update an interview type
+      operationId: updateInterviewType
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InterviewTypeRequest"
+      responses:
+        "200":
+          description: Interview type updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InterviewTypeResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Slug already taken within organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Google account not connected for google_meet provider
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDetail"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -331,6 +454,15 @@ components:
       in: path
       required: true
       description: Organization UUID
+      schema:
+        type: string
+        format: uuid
+
+    InterviewTypeID:
+      name: id
+      in: path
+      required: true
+      description: Interview type UUID
       schema:
         type: string
         format: uuid
@@ -469,6 +601,102 @@ components:
         error:
           type: string
           example: invalid credentials
+
+    ErrorDetail:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          example: connect google to use google meet interview types
+        code:
+          type: string
+          example: google_not_connected
+        action:
+          type: string
+          example: connect_google
+        action_url:
+          type: string
+          example: /integrations/google/connect
+
+    MeetingProvider:
+      type: string
+      enum: [google_meet, bale_link, custom_url]
+      example: bale_link
+
+    InterviewTypeRequest:
+      type: object
+      required: [title, slug, duration_minutes, meeting_provider]
+      properties:
+        title:
+          type: string
+          maxLength: 100
+          example: Frontend Interview
+        slug:
+          type: string
+          pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+          minLength: 2
+          maxLength: 48
+          example: frontend
+        duration_minutes:
+          type: integer
+          minimum: 5
+          maximum: 480
+          example: 45
+        buffer_minutes:
+          type: integer
+          minimum: 0
+          maximum: 120
+          default: 0
+          example: 15
+        meeting_provider:
+          $ref: "#/components/schemas/MeetingProvider"
+        meeting_url:
+          type: string
+          format: uri
+          nullable: true
+          description: Required for bale_link and custom_url; must be omitted for google_meet
+          example: https://ble.ir/join/abc
+
+    InterviewTypeResponse:
+      type: object
+      required:
+        - id
+        - organization_id
+        - title
+        - slug
+        - duration_minutes
+        - buffer_minutes
+        - meeting_provider
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        organization_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        slug:
+          type: string
+        duration_minutes:
+          type: integer
+        buffer_minutes:
+          type: integer
+        meeting_provider:
+          $ref: "#/components/schemas/MeetingProvider"
+        meeting_url:
+          type: string
+          format: uri
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
 
   responses:
     BadRequest:

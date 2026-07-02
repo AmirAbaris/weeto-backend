@@ -17,3 +17,8 @@ RETURNING id, email, password_hash, last_login_at, created_at, updated_at;
 UPDATE users
 SET last_login_at = now(), updated_at = now()
 WHERE id = $1;
+
+-- name: IsGoogleConnected :one
+SELECT (google_connected_at IS NOT NULL)::bool AS connected
+FROM users
+WHERE id = $1;
