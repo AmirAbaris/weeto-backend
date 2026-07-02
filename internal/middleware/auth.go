@@ -14,23 +14,29 @@ type contextKey string
 
 const UserIDKey contextKey = "userID"
 
-func RequireAuth(jwtSecret string, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		token := bearerToken(r.Header.Get("Authorization"))
-		if token == "" {
-			httputil.WriteError(w, http.StatusUnauthorized, "missing or invalid authorization header")
-			return
-		}
+func RequireAuth(jwtSecret string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			token := bearerToken(r.Header.Get("Authorization"))
+			if token == "" {
+				httputil.WriteError(w, http.StatusUnauthorized, "missing or invalid authorization header")
+				return
+			}
 
-		userID, err := authsvc.ParseAccessToken(token, jwtSecret)
-		if err != nil {
-			httputil.WriteError(w, http.StatusUnauthorized, "invalid or expired token")
-			return
-		}
+			userID, err := authsvc.ParseAccessToken(token, jwtSecret)
+			if err != nil {
+				httputil.WriteError(w, http.StatusUnauthorized, "invalid or expired token")
+				return
+			}
 
-		ctx := context.WithValue(r.Context(), UserIDKey, userID)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+			ctx := context.WithValue(r.Context(), UserIDKey, userID)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+func WithAuth(jwtSecret string, handler http.HandlerFunc) http.Handler {
+	return RequireAuth(jwtSecret)(handler)
 }
 
 func UserIDFromContext(ctx context.Context) (pgtype.UUID, bool) {

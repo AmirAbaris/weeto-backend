@@ -15,9 +15,11 @@ import (
 	authhandler "github.com/AmirAbaris/weeto-backend/internal/handler/auth"
 	docshandler "github.com/AmirAbaris/weeto-backend/internal/handler/docs"
 	"github.com/AmirAbaris/weeto-backend/internal/handler/health"
+	orghandler "github.com/AmirAbaris/weeto-backend/internal/handler/organization"
 	"github.com/AmirAbaris/weeto-backend/internal/middleware"
 	applogger "github.com/AmirAbaris/weeto-backend/internal/platform/logger"
 	authsvc "github.com/AmirAbaris/weeto-backend/internal/service/auth"
+	orgsvc "github.com/AmirAbaris/weeto-backend/internal/service/organization"
 	"github.com/joho/godotenv"
 )
 
@@ -48,6 +50,8 @@ func main() {
 	docsHandler := docshandler.NewHandler()
 	authService := authsvc.NewService(queries, cfg)
 	authHandler := authhandler.NewHandler(authService)
+	orgService := orgsvc.NewService(queries, cfg)
+	orgHandler := orghandler.NewHandler(orgService)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /docs", docsHandler.UI)
@@ -57,6 +61,13 @@ func main() {
 	mux.HandleFunc("POST /auth/login", authHandler.Login)
 	mux.HandleFunc("POST /auth/refresh", authHandler.Refresh)
 	mux.HandleFunc("POST /auth/logout", authHandler.Logout)
+
+	mux.Handle("POST /organizations", middleware.WithAuth(cfg.JWTSecret, orgHandler.Create))
+	mux.Handle("GET /organizations/me", middleware.WithAuth(cfg.JWTSecret, orgHandler.GetMine))
+	mux.Handle("GET /organizations/{id}", middleware.WithAuth(cfg.JWTSecret, orgHandler.GetByID))
+	mux.Handle("PUT /organizations/{id}", middleware.WithAuth(cfg.JWTSecret, orgHandler.Update))
+	mux.Handle("PATCH /organizations/{id}/logo", middleware.WithAuth(cfg.JWTSecret, orgHandler.UpdateLogo))
+	mux.Handle("DELETE /organizations/{id}", middleware.WithAuth(cfg.JWTSecret, orgHandler.Delete))
 
 	handler := middleware.RequestID(
 		middleware.Logging(logger, middleware.LoggingOptions{
