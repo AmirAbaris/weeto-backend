@@ -1,7 +1,14 @@
 openapi: 3.0.3
 info:
   title: Weeto API
-  description: Interview scheduling API for hiring teams.
+  description: |
+    Interview scheduling API for hiring teams.
+
+    **Authentication**
+    - `POST /auth/register` or `POST /auth/login` returns a short-lived `access_token` in the JSON body.
+    - A long-lived `refresh_token` is set as an HttpOnly cookie (`refresh_token`).
+    - Protected routes require `Authorization: Bearer <access_token>`.
+    - `POST /auth/refresh` and `POST /auth/logout` use the `refresh_token` cookie (no request body).
   version: 0.1.0
 
 servers:
@@ -13,6 +20,8 @@ tags:
     description: Liveness and readiness checks
   - name: Auth
     description: Registration, login, and token lifecycle
+  - name: Organizations
+    description: Recruiter organization management
 
 paths:
   /health:
@@ -42,6 +51,9 @@ paths:
       responses:
         "201":
           description: User created and tokens issued
+          headers:
+            Set-Cookie:
+              $ref: "#/components/headers/RefreshTokenCookie"
           content:
             application/json:
               schema:
@@ -71,6 +83,9 @@ paths:
       responses:
         "200":
           description: Tokens issued
+          headers:
+            Set-Cookie:
+              $ref: "#/components/headers/RefreshTokenCookie"
           content:
             application/json:
               schema:
@@ -78,11 +93,7 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
-          description: Invalid credentials
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
+          $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -90,49 +101,73 @@ paths:
     post:
       tags: [Auth]
       summary: Rotate access and refresh tokens
+      description: Uses the `refresh_token` HttpOnly cookie set by register/login.
       operationId: refresh
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/RefreshRequest"
+      security:
+        - refreshTokenCookie: []
       responses:
         "200":
           description: New token pair issued
+          headers:
+            Set-Cookie:
+              $ref: "#/components/headers/RefreshTokenCookie"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/TokenResponse"
-        "400":
-          $ref: "#/components/responses/BadRequest"
         "401":
-          description: Invalid or expired refresh token
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
+          $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
 
   /auth/logout:
     post:
       tags: [Auth]
-      summary: Revoke a refresh token
+      summary: Revoke refresh token and clear cookie
+      description: Uses the `refresh_token` HttpOnly cookie set by register/login.
       operationId: logout
+      security:
+        - refreshTokenCookie: []
+      responses:
+        "204":
+          description: Refresh token revoked
+          headers:
+            Set-Cookie:
+              description: Clears the refresh_token cookie
+              schema:
+                type: string
+                example: refresh_token=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /organizations:
+    post:
+      tags: [Organizations]
+      summary: Create an organization
+      operationId: createOrganization
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RefreshRequest"
+              $ref: "#/components/schemas/CreateOrganizationRequest"
       responses:
-        "204":
-          description: Refresh token revoked
+        "201":
+          description: Organization created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
-          description: Invalid refresh token
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: User already has an organization or slug is taken
           content:
             application/json:
               schema:
@@ -140,7 +175,173 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /organizations/me:
+    get:
+      tags: [Organizations]
+      summary: Get the authenticated user's organization
+      operationId: getMyOrganization
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Organization found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /organizations/{id}:
+    parameters:
+      - $ref: "#/components/parameters/OrganizationID"
+    get:
+      tags: [Organizations]
+      summary: Get organization by ID
+      operationId: getOrganizationByID
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Organization found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    put:
+      tags: [Organizations]
+      summary: Update organization
+      operationId: updateOrganization
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateOrganizationRequest"
+      responses:
+        "200":
+          description: Organization updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Slug already taken
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      tags: [Organizations]
+      summary: Delete organization
+      operationId: deleteOrganization
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Organization deleted
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /organizations/{id}/logo:
+    parameters:
+      - $ref: "#/components/parameters/OrganizationID"
+    patch:
+      tags: [Organizations]
+      summary: Update organization logo
+      operationId: updateOrganizationLogo
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLogoRequest"
+      responses:
+        "200":
+          description: Logo updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Access token from `POST /auth/register`, `POST /auth/login`, or `POST /auth/refresh`.
+        Paste only the token value; Swagger UI adds the `Bearer` prefix.
+    refreshTokenCookie:
+      type: apiKey
+      in: cookie
+      name: refresh_token
+      description: HttpOnly cookie set automatically by register/login responses.
+
+  parameters:
+    OrganizationID:
+      name: id
+      in: path
+      required: true
+      description: Organization UUID
+      schema:
+        type: string
+        format: uuid
+
+  headers:
+    RefreshTokenCookie:
+      description: HttpOnly refresh token cookie
+      schema:
+        type: string
+        example: refresh_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...; Path=/; Max-Age=604800; HttpOnly; Secure; SameSite=Strict
+
   schemas:
     HealthResponse:
       type: object
@@ -164,22 +365,13 @@ components:
           minLength: 8
           example: securepass123
 
-    RefreshRequest:
-      type: object
-      required: [refresh_token]
-      properties:
-        refresh_token:
-          type: string
-          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-
     TokenResponse:
       type: object
-      required: [access_token, refresh_token, expires_in, token_type]
+      required: [access_token, expires_in, token_type]
       properties:
         access_token:
           type: string
-        refresh_token:
-          type: string
+          description: Short-lived JWT access token
         expires_in:
           type: integer
           description: Access token lifetime in seconds
@@ -187,6 +379,88 @@ components:
         token_type:
           type: string
           example: Bearer
+
+    CreateOrganizationRequest:
+      type: object
+      required: [name, slug]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+          example: Acme Corp
+        slug:
+          type: string
+          pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+          minLength: 2
+          maxLength: 48
+          example: acme-corp
+        logo_url:
+          type: string
+          format: uri
+          nullable: true
+          example: https://cdn.example.com/logo.png
+
+    UpdateOrganizationRequest:
+      type: object
+      required: [name, slug]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+          example: Acme Corp
+        slug:
+          type: string
+          pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+          minLength: 2
+          maxLength: 48
+          example: acme-corp
+        logo_url:
+          type: string
+          format: uri
+          nullable: true
+        plan:
+          $ref: "#/components/schemas/PlanType"
+
+    UpdateLogoRequest:
+      type: object
+      required: [logo_url]
+      properties:
+        logo_url:
+          type: string
+          format: uri
+          example: https://cdn.example.com/logo.png
+
+    PlanType:
+      type: string
+      enum: [free, pro, business]
+      example: free
+
+    OrganizationResponse:
+      type: object
+      required: [id, name, slug, owner_id, plan, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        logo_url:
+          type: string
+          format: uri
+          nullable: true
+        owner_id:
+          type: string
+          format: uuid
+        plan:
+          $ref: "#/components/schemas/PlanType"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
 
     ErrorResponse:
       type: object
@@ -199,6 +473,24 @@ components:
   responses:
     BadRequest:
       description: Invalid request body or validation error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Authenticated but not allowed to access this resource
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Resource not found
       content:
         application/json:
           schema:
