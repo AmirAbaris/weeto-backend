@@ -40,6 +40,29 @@ const swaggerUIHTML = `<!DOCTYPE html>
       deepLinking: true,
       presets: [SwaggerUIBundle.presets.apis],
       layout: "BaseLayout",
+      persistAuthorization: true,
+      withCredentials: true,
+      requestInterceptor: (req) => {
+        req.credentials = "include";
+        return req;
+      },
+      responseInterceptor: (res) => {
+        if (res.ok && res.url && /\/auth\/(register|login|refresh)$/.test(res.url)) {
+          try {
+            const data = JSON.parse(res.text);
+            if (data.access_token && window.ui) {
+              window.ui.authActions.authorize({
+                bearerAuth: {
+                  name: "bearerAuth",
+                  schema: { type: "http", scheme: "bearer", bearerFormat: "JWT" },
+                  value: data.access_token,
+                },
+              });
+            }
+          } catch (_) {}
+        }
+        return res;
+      },
     });
   </script>
 </body>

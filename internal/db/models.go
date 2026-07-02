@@ -5,8 +5,121 @@
 package db
 
 import (
+	"database/sql/driver"
+	"fmt"
+
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+type MeetingProvider string
+
+const (
+	MeetingProviderGoogleMeet MeetingProvider = "google_meet"
+	MeetingProviderBaleLink   MeetingProvider = "bale_link"
+	MeetingProviderCustomUrl  MeetingProvider = "custom_url"
+)
+
+func (e *MeetingProvider) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = MeetingProvider(s)
+	case string:
+		*e = MeetingProvider(s)
+	default:
+		return fmt.Errorf("unsupported scan type for MeetingProvider: %T", src)
+	}
+	return nil
+}
+
+type NullMeetingProvider struct {
+	MeetingProvider MeetingProvider `json:"meeting_provider"`
+	Valid           bool            `json:"valid"` // Valid is true if MeetingProvider is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullMeetingProvider) Scan(value interface{}) error {
+	if value == nil {
+		ns.MeetingProvider, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.MeetingProvider.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullMeetingProvider) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.MeetingProvider), nil
+}
+
+type PlanType string
+
+const (
+	PlanTypeFree     PlanType = "free"
+	PlanTypePro      PlanType = "pro"
+	PlanTypeBusiness PlanType = "business"
+)
+
+func (e *PlanType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = PlanType(s)
+	case string:
+		*e = PlanType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for PlanType: %T", src)
+	}
+	return nil
+}
+
+type NullPlanType struct {
+	PlanType PlanType `json:"plan_type"`
+	Valid    bool     `json:"valid"` // Valid is true if PlanType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullPlanType) Scan(value interface{}) error {
+	if value == nil {
+		ns.PlanType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.PlanType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullPlanType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.PlanType), nil
+}
+
+type InterviewType struct {
+	ID              pgtype.UUID        `json:"id"`
+	OrganizationID  pgtype.UUID        `json:"organization_id"`
+	Title           string             `json:"title"`
+	Slug            string             `json:"slug"`
+	DurationMinutes int32              `json:"duration_minutes"`
+	BufferMinutes   int32              `json:"buffer_minutes"`
+	MeetingProvider MeetingProvider    `json:"meeting_provider"`
+	MeetingUrl      pgtype.Text        `json:"meeting_url"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+type Organization struct {
+	ID        pgtype.UUID        `json:"id"`
+	Name      string             `json:"name"`
+	Slug      string             `json:"slug"`
+	LogoUrl   pgtype.Text        `json:"logo_url"`
+	OwnerID   pgtype.UUID        `json:"owner_id"`
+	Plan      PlanType           `json:"plan"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
 
 type RefreshToken struct {
 	ID        pgtype.UUID        `json:"id"`
@@ -18,10 +131,11 @@ type RefreshToken struct {
 }
 
 type User struct {
-	ID           pgtype.UUID        `json:"id"`
-	Email        string             `json:"email"`
-	PasswordHash string             `json:"password_hash"`
-	LastLoginAt  pgtype.Timestamptz `json:"last_login_at"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	ID                pgtype.UUID        `json:"id"`
+	Email             string             `json:"email"`
+	PasswordHash      string             `json:"password_hash"`
+	LastLoginAt       pgtype.Timestamptz `json:"last_login_at"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	GoogleConnectedAt pgtype.Timestamptz `json:"google_connected_at"`
 }
