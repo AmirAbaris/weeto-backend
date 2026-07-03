@@ -78,10 +78,10 @@ SELECT
         SELECT json_agg(
             json_build_object(
                 'id', t.id,
-                'start_date', t.start_date,
+                'start_at', t.start_at,
                 'end_at', t.end_at
             )
-            ORDER BY t.start_date, t.end_at
+            ORDER BY t.start_at, t.end_at
         )
         FROM availability_time_off t
         WHERE t.organization_id = s.organization_id
@@ -163,27 +163,27 @@ func (q *Queries) InsertBreak(ctx context.Context, arg InsertBreakParams) error 
 const insertTimeOff = `-- name: InsertTimeOff :one
 INSERT INTO availability_time_off (
     organization_id,
-    start_date,
+    start_at,
     end_at
 )
 VALUES ($1, $2, $3)
-RETURNING id, organization_id, start_date, end_at
+RETURNING id, organization_id, end_at, start_at
 `
 
 type InsertTimeOffParams struct {
 	OrganizationID pgtype.UUID        `json:"organization_id"`
-	StartDate      pgtype.Date        `json:"start_date"`
+	StartAt        pgtype.Timestamptz `json:"start_at"`
 	EndAt          pgtype.Timestamptz `json:"end_at"`
 }
 
 func (q *Queries) InsertTimeOff(ctx context.Context, arg InsertTimeOffParams) (AvailabilityTimeOff, error) {
-	row := q.db.QueryRow(ctx, insertTimeOff, arg.OrganizationID, arg.StartDate, arg.EndAt)
+	row := q.db.QueryRow(ctx, insertTimeOff, arg.OrganizationID, arg.StartAt, arg.EndAt)
 	var i AvailabilityTimeOff
 	err := row.Scan(
 		&i.ID,
 		&i.OrganizationID,
-		&i.StartDate,
 		&i.EndAt,
+		&i.StartAt,
 	)
 	return i, err
 }
@@ -249,10 +249,10 @@ func (q *Queries) ListBreaksByOrg(ctx context.Context, organizationID pgtype.UUI
 }
 
 const listTimeOffByOrg = `-- name: ListTimeOffByOrg :many
-SELECT id, organization_id, start_date, end_at
+SELECT id, organization_id, end_at, start_at
 FROM availability_time_off
 WHERE organization_id = $1
-ORDER BY start_date, end_at
+ORDER BY start_at, end_at
 `
 
 func (q *Queries) ListTimeOffByOrg(ctx context.Context, organizationID pgtype.UUID) ([]AvailabilityTimeOff, error) {
@@ -267,8 +267,8 @@ func (q *Queries) ListTimeOffByOrg(ctx context.Context, organizationID pgtype.UU
 		if err := rows.Scan(
 			&i.ID,
 			&i.OrganizationID,
-			&i.StartDate,
 			&i.EndAt,
+			&i.StartAt,
 		); err != nil {
 			return nil, err
 		}

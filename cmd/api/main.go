@@ -16,12 +16,15 @@ import (
 	docshandler "github.com/AmirAbaris/weeto-backend/internal/handler/docs"
 	"github.com/AmirAbaris/weeto-backend/internal/handler/health"
 	orghandler "github.com/AmirAbaris/weeto-backend/internal/handler/organization"
+	availabilityhandler "github.com/AmirAbaris/weeto-backend/internal/handler/availability"
 	interviewtypehandler "github.com/AmirAbaris/weeto-backend/internal/handler/interviewtype"
 	"github.com/AmirAbaris/weeto-backend/internal/middleware"
 	applogger "github.com/AmirAbaris/weeto-backend/internal/platform/logger"
 	authsvc "github.com/AmirAbaris/weeto-backend/internal/service/auth"
+	availabilitysvc "github.com/AmirAbaris/weeto-backend/internal/service/availability"
 	orgsvc "github.com/AmirAbaris/weeto-backend/internal/service/organization"
 	interviewtypesvc "github.com/AmirAbaris/weeto-backend/internal/service/interviewtype"
+	slotsvc "github.com/AmirAbaris/weeto-backend/internal/service/slot"
 	"github.com/joho/godotenv"
 )
 
@@ -54,8 +57,11 @@ func main() {
 	authHandler := authhandler.NewHandler(authService)
 	orgService := orgsvc.NewService(queries, cfg)
 	orgHandler := orghandler.NewHandler(orgService)
-	interviewTypeService := interviewtypesvc.NewService(queries, orgService)
+	slotService := slotsvc.NewService(queries)
+	interviewTypeService := interviewtypesvc.NewService(queries, orgService, slotService)
 	interviewTypeHandler := interviewtypehandler.NewHandler(interviewTypeService)
+	availabilityService := availabilitysvc.NewService(pool, queries, orgService, slotService)
+	availabilityHandler := availabilityhandler.NewHandler(availabilityService)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /docs", docsHandler.UI)
@@ -76,6 +82,9 @@ func main() {
 	mux.Handle("POST /interview-types", middleware.WithAuth(cfg.JWTSecret, interviewTypeHandler.Create))
 	mux.Handle("GET /interview-types", middleware.WithAuth(cfg.JWTSecret, interviewTypeHandler.List))
 	mux.Handle("PUT /interview-types/{id}", middleware.WithAuth(cfg.JWTSecret, interviewTypeHandler.Update))
+
+	mux.Handle("PUT /availability", middleware.WithAuth(cfg.JWTSecret, availabilityHandler.Upsert))
+	mux.Handle("GET /availability", middleware.WithAuth(cfg.JWTSecret, availabilityHandler.Get))
 
 	handler := middleware.RequestID(
 		middleware.Logging(logger, middleware.LoggingOptions{

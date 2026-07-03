@@ -6,18 +6,20 @@ import (
 
 	"github.com/AmirAbaris/weeto-backend/internal/db"
 	orgsvc "github.com/AmirAbaris/weeto-backend/internal/service/organization"
+	slotsvc "github.com/AmirAbaris/weeto-backend/internal/service/slot"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Service struct {
-	q      *db.Queries
-	orgSvc *orgsvc.Service
+	q       *db.Queries
+	orgSvc  *orgsvc.Service
+	slotSvc *slotsvc.Service
 }
 
-func NewService(q *db.Queries, orgSvc *orgsvc.Service) *Service {
-	return &Service{q: q, orgSvc: orgSvc}
+func NewService(q *db.Queries, orgSvc *orgsvc.Service, slotSvc *slotsvc.Service) *Service {
+	return &Service{q: q, orgSvc: orgSvc, slotSvc: slotSvc}
 }
 
 func (s *Service) Create(ctx context.Context, ownerID pgtype.UUID, in Input) (db.InterviewType, error) {
@@ -66,6 +68,12 @@ func (s *Service) Create(ctx context.Context, ownerID pgtype.UUID, in Input) (db
 			return db.InterviewType{}, ErrSlugTaken
 		}
 		return db.InterviewType{}, err
+	}
+
+	if s.slotSvc != nil {
+		if err := s.slotSvc.RegenerateForType(ctx, nil, org.ID, created.ID, created.DurationMinutes, created.BufferMinutes); err != nil {
+			return db.InterviewType{}, err
+		}
 	}
 
 	return created, nil
@@ -136,6 +144,13 @@ func (s *Service) Update(ctx context.Context, id, ownerID pgtype.UUID, in Input)
 			return db.InterviewType{}, ErrSlugTaken
 		}
 		return db.InterviewType{}, err
+	}
+
+	if s.slotSvc != nil &&
+		(in.DurationMinutes != existing.DurationMinutes || in.BufferMinutes != existing.BufferMinutes) {
+		if err := s.slotSvc.RegenerateForType(ctx, nil, org.ID, updated.ID, updated.DurationMinutes, updated.BufferMinutes); err != nil {
+			return db.InterviewType{}, err
+		}
 	}
 
 	return updated, nil

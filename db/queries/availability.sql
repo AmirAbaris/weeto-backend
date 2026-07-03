@@ -44,7 +44,7 @@ WHERE organization_id = $1;
 -- name: InsertTimeOff :one
 INSERT INTO availability_time_off (
     organization_id,
-    start_date,
+    start_at,
     end_at
 )
 VALUES ($1, $2, $3)
@@ -71,7 +71,7 @@ ORDER BY day_of_week, start_time;
 SELECT *
 FROM availability_time_off
 WHERE organization_id = $1
-ORDER BY start_date, end_at;
+ORDER BY start_at, end_at;
 
 -- name: GetAvailabilityByOrg :one
 SELECT
@@ -110,10 +110,10 @@ SELECT
         SELECT json_agg(
             json_build_object(
                 'id', t.id,
-                'start_date', t.start_date,
+                'start_at', t.start_at,
                 'end_at', t.end_at
             )
-            ORDER BY t.start_date, t.end_at
+            ORDER BY t.start_at, t.end_at
         )
         FROM availability_time_off t
         WHERE t.organization_id = s.organization_id

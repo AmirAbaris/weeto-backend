@@ -209,3 +209,19 @@ func (q *Queries) ListSlotsByTypeInWindow(ctx context.Context, arg ListSlotsByTy
 	}
 	return items, nil
 }
+
+const setSlotBooked = `-- name: SetSlotBooked :exec
+UPDATE slots
+SET booked = $2
+WHERE id = $1
+`
+
+type SetSlotBookedParams struct {
+	ID     pgtype.UUID `json:"id"`
+	Booked bool        `json:"booked"`
+}
+
+func (q *Queries) SetSlotBooked(ctx context.Context, arg SetSlotBookedParams) error {
+	_, err := q.db.Exec(ctx, setSlotBooked, arg.ID, arg.Booked)
+	return err
+}

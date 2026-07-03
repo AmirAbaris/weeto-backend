@@ -115,8 +115,8 @@ type AvailabilitySetting struct {
 type AvailabilityTimeOff struct {
 	ID             pgtype.UUID        `json:"id"`
 	OrganizationID pgtype.UUID        `json:"organization_id"`
-	StartDate      pgtype.Date        `json:"start_date"`
 	EndAt          pgtype.Timestamptz `json:"end_at"`
+	StartAt        pgtype.Timestamptz `json:"start_at"`
 }
 
 type AvailabilityWorkingHour struct {

@@ -57,3 +57,8 @@ WHERE interview_type_id = $1
   AND start_at >= $2
   AND start_at < $3
 ORDER BY start_at;
+
+-- name: SetSlotBooked :exec
+UPDATE slots
+SET booked = $2
+WHERE id = $1;

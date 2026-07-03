@@ -24,6 +24,8 @@ tags:
     description: Recruiter organization management
   - name: InterviewTypes
     description: Interview type configuration
+  - name: Availability
+    description: Recruiter availability and slot generation rules
 
 paths:
   /health:
@@ -433,6 +435,62 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /availability:
+    put:
+      tags: [Availability]
+      summary: Replace organization availability settings
+      operationId: upsertAvailability
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AvailabilityRequest"
+      responses:
+        "200":
+          description: Availability saved and slots regenerated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AvailabilityResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Organization required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    get:
+      tags: [Availability]
+      summary: Get organization availability settings
+      operationId: getAvailability
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current availability configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AvailabilityResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Availability or organization not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -694,6 +752,124 @@ components:
         created_at:
           type: string
           format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    AvailabilityWorkingHour:
+      type: object
+      required: [day_of_week, start_time, end_time]
+      properties:
+        day_of_week:
+          type: integer
+          minimum: 0
+          maximum: 6
+          description: 0=Sunday through 6=Saturday
+          example: 1
+        start_time:
+          type: string
+          pattern: '^([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$'
+          example: "09:00"
+        end_time:
+          type: string
+          pattern: '^([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$'
+          example: "17:00"
+
+    AvailabilityBreak:
+      type: object
+      required: [day_of_week, start_time, end_time]
+      properties:
+        day_of_week:
+          type: integer
+          minimum: 0
+          maximum: 6
+        start_time:
+          type: string
+          example: "12:00"
+        end_time:
+          type: string
+          example: "13:00"
+
+    AvailabilityTimeOff:
+      type: object
+      required: [start_at, end_at]
+      properties:
+        start_at:
+          type: string
+          format: date-time
+          example: "2026-07-10T06:30:00Z"
+        end_at:
+          type: string
+          format: date-time
+          example: "2026-07-10T10:30:00Z"
+
+    AvailabilityRequest:
+      type: object
+      required: [max_interviews_per_day, working_hours]
+      properties:
+        timezone:
+          type: string
+          default: Asia/Tehran
+          example: Asia/Tehran
+        max_interviews_per_day:
+          type: integer
+          minimum: 1
+          maximum: 50
+          example: 4
+        working_hours:
+          type: array
+          items:
+            $ref: "#/components/schemas/AvailabilityWorkingHour"
+        breaks:
+          type: array
+          items:
+            $ref: "#/components/schemas/AvailabilityBreak"
+        time_off:
+          type: array
+          items:
+            $ref: "#/components/schemas/AvailabilityTimeOff"
+
+    AvailabilityResponse:
+      type: object
+      required: [timezone, max_interviews_per_day, working_hours, breaks, time_off]
+      properties:
+        timezone:
+          type: string
+        max_interviews_per_day:
+          type: integer
+        working_hours:
+          type: array
+          items:
+            allOf:
+              - $ref: "#/components/schemas/AvailabilityWorkingHour"
+              - type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  created_at:
+                    type: string
+                    format: date-time
+        breaks:
+          type: array
+          items:
+            allOf:
+              - $ref: "#/components/schemas/AvailabilityBreak"
+              - type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+        time_off:
+          type: array
+          items:
+            allOf:
+              - $ref: "#/components/schemas/AvailabilityTimeOff"
+              - type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
         updated_at:
           type: string
           format: date-time

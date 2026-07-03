@@ -124,7 +124,7 @@ func (s *Service) loadAvailability(ctx context.Context, q *db.Queries, orgID pgt
 		maxDay:  settings.MaxInterviewsPerDay,
 		hours:   workingHoursFromDB(wh),
 		breaks:  breaksFromDB(br),
-		timeOff: timeOffFromDB(to, loc),
+		timeOff: timeOffFromDB(to),
 	}, nil
 }
 
@@ -228,27 +228,18 @@ func breaksFromDB(rows []db.AvailabilityBreak) []Break {
 	return out
 }
 
-func timeOffFromDB(rows []db.AvailabilityTimeOff, loc *time.Location) []TimeOff {
+func timeOffFromDB(rows []db.AvailabilityTimeOff) []TimeOff {
 	out := make([]TimeOff, 0, len(rows))
 	for _, r := range rows {
-		if !r.StartDate.Valid || !r.EndAt.Valid {
+		if !r.StartAt.Valid || !r.EndAt.Valid {
 			continue
 		}
-		start := dateAtMidnight(r.StartDate, loc)
 		out = append(out, TimeOff{
-			StartAt: start,
+			StartAt: r.StartAt.Time,
 			EndAt:   r.EndAt.Time,
 		})
 	}
 	return out
-}
-
-func dateAtMidnight(d pgtype.Date, loc *time.Location) time.Time {
-	if !d.Valid {
-		return time.Time{}
-	}
-	t := d.Time
-	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, loc)
 }
 
 func localDayBounds(day time.Time, loc *time.Location) (time.Time, time.Time) {
