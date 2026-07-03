@@ -49,3 +49,11 @@ WHERE organization_id = $1
   AND start_at >= $3
   AND start_at < $4
 ORDER BY start_at;
+
+-- name: ListSlotsByTypeInWindow :many
+SELECT *
+FROM slots
+WHERE interview_type_id = $1
+  AND start_at >= $2
+  AND start_at < $3
+ORDER BY start_at;

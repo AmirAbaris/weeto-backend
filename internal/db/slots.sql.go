@@ -166,3 +166,46 @@ func (q *Queries) ListAvailableSlotsByType(ctx context.Context, arg ListAvailabl
 	}
 	return items, nil
 }
+
+const listSlotsByTypeInWindow = `-- name: ListSlotsByTypeInWindow :many
+SELECT id, organization_id, interview_type_id, start_at, end_at, booked, created_at
+FROM slots
+WHERE interview_type_id = $1
+  AND start_at >= $2
+  AND start_at < $3
+ORDER BY start_at
+`
+
+type ListSlotsByTypeInWindowParams struct {
+	InterviewTypeID pgtype.UUID        `json:"interview_type_id"`
+	StartAt         pgtype.Timestamptz `json:"start_at"`
+	StartAt_2       pgtype.Timestamptz `json:"start_at_2"`
+}
+
+func (q *Queries) ListSlotsByTypeInWindow(ctx context.Context, arg ListSlotsByTypeInWindowParams) ([]Slot, error) {
+	rows, err := q.db.Query(ctx, listSlotsByTypeInWindow, arg.InterviewTypeID, arg.StartAt, arg.StartAt_2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Slot{}
+	for rows.Next() {
+		var i Slot
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrganizationID,
+			&i.InterviewTypeID,
+			&i.StartAt,
+			&i.EndAt,
+			&i.Booked,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
