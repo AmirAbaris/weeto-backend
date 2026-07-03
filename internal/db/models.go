@@ -97,6 +97,37 @@ func (ns NullPlanType) Value() (driver.Value, error) {
 	return string(ns.PlanType), nil
 }
 
+type AvailabilityBreak struct {
+	ID             pgtype.UUID `json:"id"`
+	OrganizationID pgtype.UUID `json:"organization_id"`
+	DayOfWeek      int16       `json:"day_of_week"`
+	StartTime      pgtype.Time `json:"start_time"`
+	EndTime        pgtype.Time `json:"end_time"`
+}
+
+type AvailabilitySetting struct {
+	OrganizationID      pgtype.UUID        `json:"organization_id"`
+	Timezone            string             `json:"timezone"`
+	MaxInterviewsPerDay int32              `json:"max_interviews_per_day"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+}
+
+type AvailabilityTimeOff struct {
+	ID             pgtype.UUID        `json:"id"`
+	OrganizationID pgtype.UUID        `json:"organization_id"`
+	StartDate      pgtype.Date        `json:"start_date"`
+	EndAt          pgtype.Timestamptz `json:"end_at"`
+}
+
+type AvailabilityWorkingHour struct {
+	ID             pgtype.UUID        `json:"id"`
+	OrganizationID pgtype.UUID        `json:"organization_id"`
+	DayOfWeek      int16              `json:"day_of_week"`
+	StartTime      pgtype.Time        `json:"start_time"`
+	EndTime        pgtype.Time        `json:"end_time"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
 type InterviewType struct {
 	ID              pgtype.UUID        `json:"id"`
 	OrganizationID  pgtype.UUID        `json:"organization_id"`
@@ -128,6 +159,16 @@ type RefreshToken struct {
 	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	RevokedAt pgtype.Timestamptz `json:"revoked_at"`
+}
+
+type Slot struct {
+	ID              pgtype.UUID        `json:"id"`
+	OrganizationID  pgtype.UUID        `json:"organization_id"`
+	InterviewTypeID pgtype.UUID        `json:"interview_type_id"`
+	StartAt         pgtype.Timestamptz `json:"start_at"`
+	EndAt           pgtype.Timestamptz `json:"end_at"`
+	Booked          bool               `json:"booked"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
 type User struct {
