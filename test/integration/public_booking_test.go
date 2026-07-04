@@ -16,6 +16,7 @@ import (
 	docshandler "github.com/AmirAbaris/weeto-backend/internal/handler/docs"
 	"github.com/AmirAbaris/weeto-backend/internal/handler/health"
 	availabilityhandler "github.com/AmirAbaris/weeto-backend/internal/handler/availability"
+	bookinghandler "github.com/AmirAbaris/weeto-backend/internal/handler/booking"
 	interviewtypehandler "github.com/AmirAbaris/weeto-backend/internal/handler/interviewtype"
 	orghandler "github.com/AmirAbaris/weeto-backend/internal/handler/organization"
 	publichandler "github.com/AmirAbaris/weeto-backend/internal/handler/public"
@@ -236,6 +237,7 @@ func newTestServer(t *testing.T, env *TestEnv) *httptest.Server {
 		Organization:  orghandler.NewHandler(orgSvc),
 		InterviewType: interviewtypehandler.NewHandler(itSvc),
 		Availability:  availabilityhandler.NewHandler(availSvc),
+		Booking:       bookinghandler.NewHandler(bookingSvc),
 		Public:        publichandler.NewHandler(bookingSvc),
 	})
 

@@ -78,6 +78,27 @@ func (q *Queries) DeleteUnbookedSlotsByTypeInWindow(ctx context.Context, arg Del
 	return err
 }
 
+const getSlotByID = `-- name: GetSlotByID :one
+SELECT id, organization_id, interview_type_id, start_at, end_at, booked, created_at
+FROM slots
+WHERE id = $1
+`
+
+func (q *Queries) GetSlotByID(ctx context.Context, id pgtype.UUID) (Slot, error) {
+	row := q.db.QueryRow(ctx, getSlotByID, id)
+	var i Slot
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.InterviewTypeID,
+		&i.StartAt,
+		&i.EndAt,
+		&i.Booked,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const insertSlot = `-- name: InsertSlot :one
 INSERT INTO slots (
     organization_id,

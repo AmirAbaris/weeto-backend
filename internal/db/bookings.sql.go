@@ -11,6 +11,42 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const cancelBooking = `-- name: CancelBooking :one
+UPDATE booking
+SET status = 'cancelled', updated_at = NOW()
+WHERE id = $1
+  AND organization_id = $2
+  AND status = 'scheduled'
+RETURNING id, organization_id, interview_type_id, slot_id, candidate_name, candidate_phone, candidate_email, status, meet_link, calendar_event_id, reschedule_token, cancel_token, created_at, updated_at
+`
+
+type CancelBookingParams struct {
+	ID             pgtype.UUID `json:"id"`
+	OrganizationID pgtype.UUID `json:"organization_id"`
+}
+
+func (q *Queries) CancelBooking(ctx context.Context, arg CancelBookingParams) (Booking, error) {
+	row := q.db.QueryRow(ctx, cancelBooking, arg.ID, arg.OrganizationID)
+	var i Booking
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.InterviewTypeID,
+		&i.SlotID,
+		&i.CandidateName,
+		&i.CandidatePhone,
+		&i.CandidateEmail,
+		&i.Status,
+		&i.MeetLink,
+		&i.CalendarEventID,
+		&i.RescheduleToken,
+		&i.CancelToken,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const countBookingsBySlot = `-- name: CountBookingsBySlot :one
 SELECT COUNT(*)::int
 FROM booking
@@ -32,6 +68,42 @@ WHERE id = $1
 
 func (q *Queries) GetBookingByID(ctx context.Context, id pgtype.UUID) (Booking, error) {
 	row := q.db.QueryRow(ctx, getBookingByID, id)
+	var i Booking
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.InterviewTypeID,
+		&i.SlotID,
+		&i.CandidateName,
+		&i.CandidatePhone,
+		&i.CandidateEmail,
+		&i.Status,
+		&i.MeetLink,
+		&i.CalendarEventID,
+		&i.RescheduleToken,
+		&i.CancelToken,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getScheduledBookingForUpdate = `-- name: GetScheduledBookingForUpdate :one
+SELECT b.id, b.organization_id, b.interview_type_id, b.slot_id, b.candidate_name, b.candidate_phone, b.candidate_email, b.status, b.meet_link, b.calendar_event_id, b.reschedule_token, b.cancel_token, b.created_at, b.updated_at
+FROM booking b
+WHERE b.id = $1
+  AND b.organization_id = $2
+  AND b.status = 'scheduled'
+FOR UPDATE
+`
+
+type GetScheduledBookingForUpdateParams struct {
+	ID             pgtype.UUID `json:"id"`
+	OrganizationID pgtype.UUID `json:"organization_id"`
+}
+
+func (q *Queries) GetScheduledBookingForUpdate(ctx context.Context, arg GetScheduledBookingForUpdateParams) (Booking, error) {
+	row := q.db.QueryRow(ctx, getScheduledBookingForUpdate, arg.ID, arg.OrganizationID)
 	var i Booking
 	err := row.Scan(
 		&i.ID,
@@ -165,6 +237,84 @@ func (q *Queries) ListNotificationOutboxByOrg(ctx context.Context, organizationI
 			&i.RetryCount,
 			&i.CreatedAt,
 			&i.ProcessedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listScheduledBookingsByOrg = `-- name: ListScheduledBookingsByOrg :many
+SELECT
+    b.id, b.organization_id, b.interview_type_id, b.slot_id, b.candidate_name, b.candidate_phone, b.candidate_email, b.status, b.meet_link, b.calendar_event_id, b.reschedule_token, b.cancel_token, b.created_at, b.updated_at,
+    s.start_at,
+    s.end_at,
+    it.title AS interview_type_title
+FROM booking b
+JOIN slots s ON s.id = b.slot_id
+JOIN interview_type it ON it.id = b.interview_type_id
+WHERE b.organization_id = $1
+  AND b.status = 'scheduled'
+  AND s.start_at >= $2
+ORDER BY s.start_at
+`
+
+type ListScheduledBookingsByOrgParams struct {
+	OrganizationID pgtype.UUID        `json:"organization_id"`
+	StartAt        pgtype.Timestamptz `json:"start_at"`
+}
+
+type ListScheduledBookingsByOrgRow struct {
+	ID                 pgtype.UUID        `json:"id"`
+	OrganizationID     pgtype.UUID        `json:"organization_id"`
+	InterviewTypeID    pgtype.UUID        `json:"interview_type_id"`
+	SlotID             pgtype.UUID        `json:"slot_id"`
+	CandidateName      string             `json:"candidate_name"`
+	CandidatePhone     string             `json:"candidate_phone"`
+	CandidateEmail     string             `json:"candidate_email"`
+	Status             BookingStatus      `json:"status"`
+	MeetLink           pgtype.Text        `json:"meet_link"`
+	CalendarEventID    pgtype.Text        `json:"calendar_event_id"`
+	RescheduleToken    string             `json:"reschedule_token"`
+	CancelToken        string             `json:"cancel_token"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	StartAt            pgtype.Timestamptz `json:"start_at"`
+	EndAt              pgtype.Timestamptz `json:"end_at"`
+	InterviewTypeTitle string             `json:"interview_type_title"`
+}
+
+func (q *Queries) ListScheduledBookingsByOrg(ctx context.Context, arg ListScheduledBookingsByOrgParams) ([]ListScheduledBookingsByOrgRow, error) {
+	rows, err := q.db.Query(ctx, listScheduledBookingsByOrg, arg.OrganizationID, arg.StartAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListScheduledBookingsByOrgRow{}
+	for rows.Next() {
+		var i ListScheduledBookingsByOrgRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrganizationID,
+			&i.InterviewTypeID,
+			&i.SlotID,
+			&i.CandidateName,
+			&i.CandidatePhone,
+			&i.CandidateEmail,
+			&i.Status,
+			&i.MeetLink,
+			&i.CalendarEventID,
+			&i.RescheduleToken,
+			&i.CancelToken,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.StartAt,
+			&i.EndAt,
+			&i.InterviewTypeTitle,
 		); err != nil {
 			return nil, err
 		}

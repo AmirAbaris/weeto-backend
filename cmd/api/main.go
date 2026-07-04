@@ -18,6 +18,7 @@ import (
 	orghandler "github.com/AmirAbaris/weeto-backend/internal/handler/organization"
 	availabilityhandler "github.com/AmirAbaris/weeto-backend/internal/handler/availability"
 	interviewtypehandler "github.com/AmirAbaris/weeto-backend/internal/handler/interviewtype"
+	bookinghandler "github.com/AmirAbaris/weeto-backend/internal/handler/booking"
 	publichandler "github.com/AmirAbaris/weeto-backend/internal/handler/public"
 	"github.com/AmirAbaris/weeto-backend/internal/middleware"
 	applogger "github.com/AmirAbaris/weeto-backend/internal/platform/logger"
@@ -66,6 +67,7 @@ func main() {
 	availabilityService := availabilitysvc.NewService(pool, queries, orgService, slotService)
 	availabilityHandler := availabilityhandler.NewHandler(availabilityService)
 	bookingService := bookingsvc.NewService(pool, queries, orgService, slotService)
+	bookingHandler := bookinghandler.NewHandler(bookingService)
 	publicHandler := publichandler.NewHandler(bookingService)
 
 	mux := http.NewServeMux()
@@ -76,6 +78,7 @@ func main() {
 		Organization:  orgHandler,
 		InterviewType: interviewTypeHandler,
 		Availability:  availabilityHandler,
+		Booking:       bookingHandler,
 		Public:        publicHandler,
 	})
 

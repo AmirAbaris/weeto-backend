@@ -26,6 +26,8 @@ tags:
     description: Interview type configuration
   - name: Availability
     description: Recruiter availability and slot generation rules
+  - name: Bookings
+    description: Recruiter booking management
   - name: Public
     description: Public candidate booking (no authentication)
 
@@ -493,6 +495,60 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /bookings:
+    get:
+      tags: [Bookings]
+      summary: List upcoming bookings
+      description: |
+        Returns scheduled bookings for the recruiter's organization, split into
+        today's interviews (org timezone) and upcoming future days.
+      operationId: listBookings
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Bookings grouped by today and upcoming
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookingListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Organization required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /bookings/{id}:
+    delete:
+      tags: [Bookings]
+      summary: Cancel a booking
+      description: Cancels a scheduled booking and frees the associated slot.
+      operationId: cancelBooking
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BookingID"
+      responses:
+        "204":
+          description: Booking cancelled
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Booking not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /public/{orgSlug}/{typeSlug}:
     get:
       tags: [Public]
@@ -627,6 +683,15 @@ components:
       in: path
       required: true
       description: Interview type UUID
+      schema:
+        type: string
+        format: uuid
+
+    BookingID:
+      name: id
+      in: path
+      required: true
+      description: Booking UUID
       schema:
         type: string
         format: uuid
@@ -1066,6 +1131,57 @@ components:
           type: string
           format: email
           example: ali@example.com
+
+    BookingItem:
+      type: object
+      required:
+        - id
+        - slot_id
+        - name
+        - phone
+        - email
+        - status
+        - start_at
+        - end_at
+        - interview_title
+      properties:
+        id:
+          type: string
+          format: uuid
+        slot_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+          format: email
+        status:
+          type: string
+          enum: [scheduled]
+        start_at:
+          type: string
+          format: date-time
+        end_at:
+          type: string
+          format: date-time
+        interview_title:
+          type: string
+
+    BookingListResponse:
+      type: object
+      required: [today, upcoming]
+      properties:
+        today:
+          type: array
+          items:
+            $ref: "#/components/schemas/BookingItem"
+        upcoming:
+          type: array
+          items:
+            $ref: "#/components/schemas/BookingItem"
 
     PublicBookResponse:
       type: object

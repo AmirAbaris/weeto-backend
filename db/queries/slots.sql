@@ -50,6 +50,11 @@ WHERE organization_id = $1
   AND start_at < $4
 ORDER BY start_at;
 
+-- name: GetSlotByID :one
+SELECT *
+FROM slots
+WHERE id = $1;
+
 -- name: ListSlotsByTypeInWindow :many
 SELECT *
 FROM slots

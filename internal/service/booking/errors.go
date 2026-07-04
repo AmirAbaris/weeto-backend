@@ -11,4 +11,7 @@ var (
 	ErrInvalidPhone      = errors.New("invalid candidate phone")
 	ErrInvalidEmail      = errors.New("invalid candidate email")
 	ErrInvalidSlotID     = errors.New("invalid slot id")
+	ErrBookingNotFound   = errors.New("booking not found")
+	ErrOrgRequired       = errors.New("organization required")
+	ErrForbidden         = errors.New("forbidden")
 )

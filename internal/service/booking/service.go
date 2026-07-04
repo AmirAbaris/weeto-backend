@@ -51,6 +51,23 @@ type BookingResult struct {
 	Slot    db.Slot
 }
 
+type BookingView struct {
+	ID             string    `json:"id"`
+	SlotID         string    `json:"slot_id"`
+	Name           string    `json:"name"`
+	Phone          string    `json:"phone"`
+	Email          string    `json:"email"`
+	Status         string    `json:"status"`
+	StartAt        time.Time `json:"start_at"`
+	EndAt          time.Time `json:"end_at"`
+	InterviewTitle string    `json:"interview_title"`
+}
+
+type ListResult struct {
+	Today    []BookingView `json:"today"`
+	Upcoming []BookingView `json:"upcoming"`
+}
+
 func (s *Service) ResolveType(ctx context.Context, orgSlug, typeSlug string) (Metadata, error) {
 	org, err := s.orgSvc.GetBySlug(ctx, orgSlug)
 	if err != nil {
@@ -200,14 +217,132 @@ func (s *Service) Book(ctx context.Context, orgSlug, typeSlug string, in BookInp
 	return BookingResult{Booking: booking, Slot: slot}, nil
 }
 
-func (s *Service) slotWindow(ctx context.Context, orgID pgtype.UUID) (time.Time, time.Time, error) {
-	loc := defaultLocation()
-	settings, err := s.q.GetAvailabilitySettingsByOrg(ctx, orgID)
-	if err == nil && settings.Timezone != "" {
-		if parsed, err := time.LoadLocation(settings.Timezone); err == nil {
-			loc = parsed
+func (s *Service) List(ctx context.Context, ownerID pgtype.UUID) (ListResult, error) {
+	if !ownerID.Valid {
+		return ListResult{}, ErrForbidden
+	}
+
+	org, err := s.orgSvc.GetByOwner(ctx, ownerID)
+	if err != nil {
+		if errors.Is(err, orgsvc.ErrOrgNotFound) {
+			return ListResult{}, ErrOrgRequired
 		}
-	} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return ListResult{}, err
+	}
+
+	loc, err := s.orgLocation(ctx, org.ID)
+	if err != nil {
+		return ListResult{}, err
+	}
+
+	now := s.slotSvc.Now()
+	todayStart := startOfDay(now, loc)
+	tomorrowStart := todayStart.Add(24 * time.Hour)
+
+	rows, err := s.q.ListScheduledBookingsByOrg(ctx, db.ListScheduledBookingsByOrgParams{
+		OrganizationID: org.ID,
+		StartAt:        timestamptz(todayStart),
+	})
+	if err != nil {
+		return ListResult{}, err
+	}
+
+	today := make([]BookingView, 0)
+	upcoming := make([]BookingView, 0)
+	for _, row := range rows {
+		view := toBookingView(row)
+		if row.StartAt.Time.Before(tomorrowStart) {
+			today = append(today, view)
+		} else {
+			upcoming = append(upcoming, view)
+		}
+	}
+
+	return ListResult{Today: today, Upcoming: upcoming}, nil
+}
+
+func (s *Service) Cancel(ctx context.Context, ownerID, bookingID pgtype.UUID) error {
+	if !ownerID.Valid {
+		return ErrForbidden
+	}
+	if !bookingID.Valid {
+		return ErrBookingNotFound
+	}
+
+	org, err := s.orgSvc.GetByOwner(ctx, ownerID)
+	if err != nil {
+		if errors.Is(err, orgsvc.ErrOrgNotFound) {
+			return ErrOrgRequired
+		}
+		return err
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	qtx := s.q.WithTx(tx)
+
+	booking, err := qtx.GetScheduledBookingForUpdate(ctx, db.GetScheduledBookingForUpdateParams{
+		ID:             bookingID,
+		OrganizationID: org.ID,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrBookingNotFound
+		}
+		return err
+	}
+
+	cancelled, err := qtx.CancelBooking(ctx, db.CancelBookingParams{
+		ID:             bookingID,
+		OrganizationID: org.ID,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrBookingNotFound
+		}
+		return err
+	}
+
+	if err := qtx.SetSlotBooked(ctx, db.SetSlotBookedParams{
+		ID:     booking.SlotID,
+		Booked: false,
+	}); err != nil {
+		return err
+	}
+
+	it, err := qtx.GetInterviewTypeByID(ctx, booking.InterviewTypeID)
+	if err != nil {
+		return err
+	}
+
+	slot, err := qtx.GetSlotByID(ctx, booking.SlotID)
+	if err != nil {
+		return err
+	}
+
+	payload, err := bookingPayload(org, it, cancelled, slot)
+	if err != nil {
+		return err
+	}
+
+	if _, err := qtx.InsertNotificationOutbox(ctx, db.InsertNotificationOutboxParams{
+		OrganizationID: org.ID,
+		EventType:      db.NotificationEventTypeBookingCancelled,
+		Payload:        payload,
+	}); err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
+}
+
+func (s *Service) slotWindow(ctx context.Context, orgID pgtype.UUID) (time.Time, time.Time, error) {
+	loc, err := s.orgLocation(ctx, orgID)
+	if err != nil {
 		return time.Time{}, time.Time{}, err
 	}
 
@@ -216,6 +351,19 @@ func (s *Service) slotWindow(ctx context.Context, orgID pgtype.UUID) (time.Time,
 	start := maxTime(now.UTC(), todayStart)
 	end := todayStart.AddDate(0, 0, slotsvc.DefaultWindowDays)
 	return start, end, nil
+}
+
+func (s *Service) orgLocation(ctx context.Context, orgID pgtype.UUID) (*time.Location, error) {
+	loc := defaultLocation()
+	settings, err := s.q.GetAvailabilitySettingsByOrg(ctx, orgID)
+	if err == nil && settings.Timezone != "" {
+		if parsed, err := time.LoadLocation(settings.Timezone); err == nil {
+			loc = parsed
+		}
+	} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
+	return loc, nil
 }
 
 func bookingPayload(org db.Organization, it db.InterviewType, booking db.Booking, slot db.Slot) ([]byte, error) {
@@ -241,6 +389,20 @@ func toSlotView(slot db.Slot) SlotView {
 		ID:      slot.ID.String(),
 		StartAt: slot.StartAt.Time.UTC(),
 		EndAt:   slot.EndAt.Time.UTC(),
+	}
+}
+
+func toBookingView(row db.ListScheduledBookingsByOrgRow) BookingView {
+	return BookingView{
+		ID:             row.ID.String(),
+		SlotID:         row.SlotID.String(),
+		Name:           row.CandidateName,
+		Phone:          row.CandidatePhone,
+		Email:          row.CandidateEmail,
+		Status:         string(row.Status),
+		StartAt:        row.StartAt.Time.UTC(),
+		EndAt:          row.EndAt.Time.UTC(),
+		InterviewTitle: row.InterviewTypeTitle,
 	}
 }
 

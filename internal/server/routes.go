@@ -5,6 +5,7 @@ import (
 
 	authhandler "github.com/AmirAbaris/weeto-backend/internal/handler/auth"
 	availabilityhandler "github.com/AmirAbaris/weeto-backend/internal/handler/availability"
+	bookinghandler "github.com/AmirAbaris/weeto-backend/internal/handler/booking"
 	docshandler "github.com/AmirAbaris/weeto-backend/internal/handler/docs"
 	"github.com/AmirAbaris/weeto-backend/internal/handler/health"
 	interviewtypehandler "github.com/AmirAbaris/weeto-backend/internal/handler/interviewtype"
@@ -20,6 +21,7 @@ type Handlers struct {
 	Organization  *orghandler.Handler
 	InterviewType *interviewtypehandler.Handler
 	Availability  *availabilityhandler.Handler
+	Booking       *bookinghandler.Handler
 	Public        *publichandler.Handler
 }
 
@@ -45,6 +47,9 @@ func Register(mux *http.ServeMux, jwtSecret string, h Handlers) {
 
 	mux.Handle("PUT /availability", middleware.WithAuth(jwtSecret, h.Availability.Upsert))
 	mux.Handle("GET /availability", middleware.WithAuth(jwtSecret, h.Availability.Get))
+
+	mux.Handle("GET /bookings", middleware.WithAuth(jwtSecret, h.Booking.List))
+	mux.Handle("DELETE /bookings/{id}", middleware.WithAuth(jwtSecret, h.Booking.Cancel))
 
 	mux.HandleFunc("GET /public/{orgSlug}/{typeSlug}", h.Public.GetMetadata)
 	mux.HandleFunc("GET /public/{orgSlug}/{typeSlug}/slots", h.Public.ListSlots)
