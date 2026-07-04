@@ -98,6 +98,35 @@ func (q *Queries) GetInterviewTypeByID(ctx context.Context, id pgtype.UUID) (Int
 	return i, err
 }
 
+const getInterviewTypeByOrgAndSlug = `-- name: GetInterviewTypeByOrgAndSlug :one
+SELECT id, organization_id, title, slug, duration_minutes, buffer_minutes, meeting_provider, meeting_url, created_at, updated_at
+FROM interview_type
+WHERE organization_id = $1 AND slug = $2
+`
+
+type GetInterviewTypeByOrgAndSlugParams struct {
+	OrganizationID pgtype.UUID `json:"organization_id"`
+	Slug           string      `json:"slug"`
+}
+
+func (q *Queries) GetInterviewTypeByOrgAndSlug(ctx context.Context, arg GetInterviewTypeByOrgAndSlugParams) (InterviewType, error) {
+	row := q.db.QueryRow(ctx, getInterviewTypeByOrgAndSlug, arg.OrganizationID, arg.Slug)
+	var i InterviewType
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.Title,
+		&i.Slug,
+		&i.DurationMinutes,
+		&i.BufferMinutes,
+		&i.MeetingProvider,
+		&i.MeetingUrl,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const interviewTypeExistsBySlug = `-- name: InterviewTypeExistsBySlug :one
 SELECT EXISTS (
     SELECT 1

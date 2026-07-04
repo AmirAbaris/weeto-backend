@@ -26,6 +26,8 @@ tags:
     description: Interview type configuration
   - name: Availability
     description: Recruiter availability and slot generation rules
+  - name: Public
+    description: Public candidate booking (no authentication)
 
 paths:
   /health:
@@ -491,6 +493,110 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /public/{orgSlug}/{typeSlug}:
+    get:
+      tags: [Public]
+      summary: Get booking page metadata
+      operationId: getPublicBookingMetadata
+      parameters:
+        - name: orgSlug
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+        - name: typeSlug
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+      responses:
+        "200":
+          description: Organization and interview type metadata for the public booking page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicMetadataResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /public/{orgSlug}/{typeSlug}/slots:
+    get:
+      tags: [Public]
+      summary: List available booking slots
+      operationId: listPublicBookingSlots
+      parameters:
+        - name: orgSlug
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+        - name: typeSlug
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+      responses:
+        "200":
+          description: Available slots in ISO 8601 UTC
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicSlotsResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /public/{orgSlug}/{typeSlug}/book:
+    post:
+      tags: [Public]
+      summary: Book an interview slot
+      operationId: bookPublicSlot
+      parameters:
+        - name: orgSlug
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+        - name: typeSlug
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublicBookRequest"
+      responses:
+        "201":
+          description: Booking created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicBookResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Slot is no longer available (concurrent double-book)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -873,6 +979,134 @@ components:
         updated_at:
           type: string
           format: date-time
+
+    PublicOrganizationView:
+      type: object
+      required: [name, slug]
+      properties:
+        name:
+          type: string
+          example: Acme Corp
+        slug:
+          type: string
+          example: acme-corp
+        logo_url:
+          type: string
+          format: uri
+          nullable: true
+
+    PublicInterviewTypeView:
+      type: object
+      required: [title, slug, duration_minutes, buffer_minutes, meeting_provider]
+      properties:
+        title:
+          type: string
+          example: Technical Interview
+        slug:
+          type: string
+          example: technical
+        duration_minutes:
+          type: integer
+          example: 30
+        buffer_minutes:
+          type: integer
+          example: 0
+        meeting_provider:
+          type: string
+          enum: [google_meet, bale_link, custom_url]
+
+    PublicMetadataResponse:
+      type: object
+      required: [organization, interview_type]
+      properties:
+        organization:
+          $ref: "#/components/schemas/PublicOrganizationView"
+        interview_type:
+          $ref: "#/components/schemas/PublicInterviewTypeView"
+
+    PublicSlot:
+      type: object
+      required: [id, start_at, end_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        start_at:
+          type: string
+          format: date-time
+          example: "2026-07-06T05:30:00Z"
+        end_at:
+          type: string
+          format: date-time
+          example: "2026-07-06T06:30:00Z"
+
+    PublicSlotsResponse:
+      type: object
+      required: [slots]
+      properties:
+        slots:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicSlot"
+
+    PublicBookRequest:
+      type: object
+      required: [slot_id, name, phone, email]
+      properties:
+        slot_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: Ali Rezaei
+        phone:
+          type: string
+          example: "+989121234567"
+        email:
+          type: string
+          format: email
+          example: ali@example.com
+
+    PublicBookResponse:
+      type: object
+      required:
+        - id
+        - slot_id
+        - name
+        - phone
+        - email
+        - status
+        - start_at
+        - end_at
+        - interview_title
+        - organization_name
+      properties:
+        id:
+          type: string
+          format: uuid
+        slot_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+          format: email
+        status:
+          type: string
+          enum: [scheduled]
+        start_at:
+          type: string
+          format: date-time
+        end_at:
+          type: string
+          format: date-time
+        interview_title:
+          type: string
+        organization_name:
+          type: string
 
   responses:
     BadRequest:

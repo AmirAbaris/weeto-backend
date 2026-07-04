@@ -11,6 +11,48 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type BookingStatus string
+
+const (
+	BookingStatusScheduled BookingStatus = "scheduled"
+	BookingStatusCancelled BookingStatus = "cancelled"
+)
+
+func (e *BookingStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = BookingStatus(s)
+	case string:
+		*e = BookingStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for BookingStatus: %T", src)
+	}
+	return nil
+}
+
+type NullBookingStatus struct {
+	BookingStatus BookingStatus `json:"booking_status"`
+	Valid         bool          `json:"valid"` // Valid is true if BookingStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullBookingStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.BookingStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.BookingStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullBookingStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.BookingStatus), nil
+}
+
 type MeetingProvider string
 
 const (
@@ -52,6 +94,93 @@ func (ns NullMeetingProvider) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.MeetingProvider), nil
+}
+
+type NotificationEventType string
+
+const (
+	NotificationEventTypeBookingCreated     NotificationEventType = "booking_created"
+	NotificationEventTypeBookingRescheduled NotificationEventType = "booking_rescheduled"
+	NotificationEventTypeBookingCancelled   NotificationEventType = "booking_cancelled"
+	NotificationEventTypeReminder24h        NotificationEventType = "reminder_24h"
+)
+
+func (e *NotificationEventType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = NotificationEventType(s)
+	case string:
+		*e = NotificationEventType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for NotificationEventType: %T", src)
+	}
+	return nil
+}
+
+type NullNotificationEventType struct {
+	NotificationEventType NotificationEventType `json:"notification_event_type"`
+	Valid                 bool                  `json:"valid"` // Valid is true if NotificationEventType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullNotificationEventType) Scan(value interface{}) error {
+	if value == nil {
+		ns.NotificationEventType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.NotificationEventType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullNotificationEventType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.NotificationEventType), nil
+}
+
+type NotificationStatus string
+
+const (
+	NotificationStatusPending NotificationStatus = "pending"
+	NotificationStatusSent    NotificationStatus = "sent"
+	NotificationStatusFailed  NotificationStatus = "failed"
+)
+
+func (e *NotificationStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = NotificationStatus(s)
+	case string:
+		*e = NotificationStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for NotificationStatus: %T", src)
+	}
+	return nil
+}
+
+type NullNotificationStatus struct {
+	NotificationStatus NotificationStatus `json:"notification_status"`
+	Valid              bool               `json:"valid"` // Valid is true if NotificationStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullNotificationStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.NotificationStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.NotificationStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullNotificationStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.NotificationStatus), nil
 }
 
 type PlanType string
@@ -128,6 +257,23 @@ type AvailabilityWorkingHour struct {
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
+type Booking struct {
+	ID              pgtype.UUID        `json:"id"`
+	OrganizationID  pgtype.UUID        `json:"organization_id"`
+	InterviewTypeID pgtype.UUID        `json:"interview_type_id"`
+	SlotID          pgtype.UUID        `json:"slot_id"`
+	CandidateName   string             `json:"candidate_name"`
+	CandidatePhone  string             `json:"candidate_phone"`
+	CandidateEmail  string             `json:"candidate_email"`
+	Status          BookingStatus      `json:"status"`
+	MeetLink        pgtype.Text        `json:"meet_link"`
+	CalendarEventID pgtype.Text        `json:"calendar_event_id"`
+	RescheduleToken string             `json:"reschedule_token"`
+	CancelToken     string             `json:"cancel_token"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
 type InterviewType struct {
 	ID              pgtype.UUID        `json:"id"`
 	OrganizationID  pgtype.UUID        `json:"organization_id"`
@@ -139,6 +285,17 @@ type InterviewType struct {
 	MeetingUrl      pgtype.Text        `json:"meeting_url"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+type NotificationOutbox struct {
+	ID             pgtype.UUID           `json:"id"`
+	OrganizationID pgtype.UUID           `json:"organization_id"`
+	EventType      NotificationEventType `json:"event_type"`
+	Payload        []byte                `json:"payload"`
+	Status         NotificationStatus    `json:"status"`
+	RetryCount     int32                 `json:"retry_count"`
+	CreatedAt      pgtype.Timestamptz    `json:"created_at"`
+	ProcessedAt    pgtype.Timestamptz    `json:"processed_at"`
 }
 
 type Organization struct {

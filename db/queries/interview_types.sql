@@ -46,3 +46,8 @@ SELECT EXISTS (
     FROM interview_type
     WHERE organization_id = $1 AND slug = $2
 );
+
+-- name: GetInterviewTypeByOrgAndSlug :one
+SELECT *
+FROM interview_type
+WHERE organization_id = $1 AND slug = $2;

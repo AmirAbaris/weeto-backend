@@ -13,8 +13,9 @@ import (
 
 	"github.com/AmirAbaris/weeto-backend/internal/config"
 	"github.com/AmirAbaris/weeto-backend/internal/db"
-	authsvc "github.com/AmirAbaris/weeto-backend/internal/service/auth"
+	authsvc 	"github.com/AmirAbaris/weeto-backend/internal/service/auth"
 	availabilitysvc "github.com/AmirAbaris/weeto-backend/internal/service/availability"
+	bookingsvc "github.com/AmirAbaris/weeto-backend/internal/service/booking"
 	interviewtypesvc "github.com/AmirAbaris/weeto-backend/internal/service/interviewtype"
 	orgsvc "github.com/AmirAbaris/weeto-backend/internal/service/organization"
 	slotsvc "github.com/AmirAbaris/weeto-backend/internal/service/slot"
@@ -84,6 +85,8 @@ func TruncateAll(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
 	_, err := pool.Exec(context.Background(), `
 		TRUNCATE TABLE
+			notification_outbox,
+			booking,
 			slots,
 			availability_time_off,
 			availability_breaks,
@@ -101,16 +104,18 @@ func TruncateAll(t *testing.T, pool *pgxpool.Pool) {
 }
 
 type TestEnv struct {
-	T        *testing.T
-	Ctx      context.Context
-	Pool     *pgxpool.Pool
-	Queries  *db.Queries
-	OrgID    pgtype.UUID
-	UserID   pgtype.UUID
-	Now      time.Time
-	SlotSvc  *slotsvc.Service
-	AvailSvc *availabilitysvc.Service
-	ITSvc    *interviewtypesvc.Service
+	T          *testing.T
+	Ctx        context.Context
+	Pool       *pgxpool.Pool
+	Queries    *db.Queries
+	OrgID      pgtype.UUID
+	OrgSlug    string
+	UserID     pgtype.UUID
+	Now        time.Time
+	SlotSvc    *slotsvc.Service
+	AvailSvc   *availabilitysvc.Service
+	ITSvc      *interviewtypesvc.Service
+	BookingSvc *bookingsvc.Service
 }
 
 func NewTestEnv(t *testing.T, now time.Time) *TestEnv {
@@ -125,21 +130,24 @@ func NewTestEnv(t *testing.T, now time.Time) *TestEnv {
 	slotSvc.Now = func() time.Time { return now }
 	availSvc := availabilitysvc.NewService(pool, queries, orgSvc, slotSvc)
 	itSvc := interviewtypesvc.NewService(queries, orgSvc, slotSvc)
+	bookingSvc := bookingsvc.NewService(pool, queries, orgSvc, slotSvc)
 
 	userID := seedUser(t, queries)
-	orgID := seedOrg(t, queries, userID)
+	orgID, orgSlug := seedOrg(t, queries, userID)
 
 	return &TestEnv{
-		T:        t,
-		Ctx:      context.Background(),
-		Pool:     pool,
-		Queries:  queries,
-		OrgID:    orgID,
-		UserID:   userID,
-		Now:      now,
-		SlotSvc:  slotSvc,
-		AvailSvc: availSvc,
-		ITSvc:    itSvc,
+		T:          t,
+		Ctx:        context.Background(),
+		Pool:       pool,
+		Queries:    queries,
+		OrgID:      orgID,
+		OrgSlug:    orgSlug,
+		UserID:     userID,
+		Now:        now,
+		SlotSvc:    slotSvc,
+		AvailSvc:   availSvc,
+		ITSvc:      itSvc,
+		BookingSvc: bookingSvc,
 	}
 }
 
@@ -159,18 +167,19 @@ func seedUser(t *testing.T, q *db.Queries) pgtype.UUID {
 	return user.ID
 }
 
-func seedOrg(t *testing.T, q *db.Queries, ownerID pgtype.UUID) pgtype.UUID {
+func seedOrg(t *testing.T, q *db.Queries, ownerID pgtype.UUID) (pgtype.UUID, string) {
 	t.Helper()
+	slug := fmt.Sprintf("test-org-%d", time.Now().UnixNano())
 	org, err := q.CreateOrganization(context.Background(), db.CreateOrganizationParams{
 		Name:    "Test Org",
-		Slug:    fmt.Sprintf("test-org-%d", time.Now().UnixNano()),
+		Slug:    slug,
 		OwnerID: ownerID,
 		Plan:    db.PlanTypeFree,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	return org.ID
+	return org.ID, slug
 }
 
 func (e *TestEnv) UpsertAvailability(in availabilitysvc.Input) {
@@ -234,6 +243,17 @@ func (e *TestEnv) SlotsOnLocalDay(typeID pgtype.UUID, day time.Time, loc *time.L
 		e.T.Fatal(err)
 	}
 	return slots
+}
+
+func (e *TestEnv) FirstAvailableSlot(it db.InterviewType) db.Slot {
+	e.T.Helper()
+	for _, slot := range e.ListSlots(it.ID) {
+		if !slot.Booked {
+			return slot
+		}
+	}
+	e.T.Fatal("no available slots")
+	return db.Slot{}
 }
 
 func (e *TestEnv) BookSlot(slotID pgtype.UUID) {

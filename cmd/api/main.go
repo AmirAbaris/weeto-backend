@@ -18,10 +18,13 @@ import (
 	orghandler "github.com/AmirAbaris/weeto-backend/internal/handler/organization"
 	availabilityhandler "github.com/AmirAbaris/weeto-backend/internal/handler/availability"
 	interviewtypehandler "github.com/AmirAbaris/weeto-backend/internal/handler/interviewtype"
+	publichandler "github.com/AmirAbaris/weeto-backend/internal/handler/public"
 	"github.com/AmirAbaris/weeto-backend/internal/middleware"
 	applogger "github.com/AmirAbaris/weeto-backend/internal/platform/logger"
+	"github.com/AmirAbaris/weeto-backend/internal/server"
 	authsvc "github.com/AmirAbaris/weeto-backend/internal/service/auth"
 	availabilitysvc "github.com/AmirAbaris/weeto-backend/internal/service/availability"
+	bookingsvc "github.com/AmirAbaris/weeto-backend/internal/service/booking"
 	orgsvc "github.com/AmirAbaris/weeto-backend/internal/service/organization"
 	interviewtypesvc "github.com/AmirAbaris/weeto-backend/internal/service/interviewtype"
 	slotsvc "github.com/AmirAbaris/weeto-backend/internal/service/slot"
@@ -62,29 +65,19 @@ func main() {
 	interviewTypeHandler := interviewtypehandler.NewHandler(interviewTypeService)
 	availabilityService := availabilitysvc.NewService(pool, queries, orgService, slotService)
 	availabilityHandler := availabilityhandler.NewHandler(availabilityService)
+	bookingService := bookingsvc.NewService(pool, queries, orgService, slotService)
+	publicHandler := publichandler.NewHandler(bookingService)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /docs", docsHandler.UI)
-	mux.HandleFunc("GET /openapi.yaml", docsHandler.Spec)
-	mux.HandleFunc("GET /health", healthHandler.Live)
-	mux.HandleFunc("POST /auth/register", authHandler.Register)
-	mux.HandleFunc("POST /auth/login", authHandler.Login)
-	mux.HandleFunc("POST /auth/refresh", authHandler.Refresh)
-	mux.HandleFunc("POST /auth/logout", authHandler.Logout)
-
-	mux.Handle("POST /organizations", middleware.WithAuth(cfg.JWTSecret, orgHandler.Create))
-	mux.Handle("GET /organizations/me", middleware.WithAuth(cfg.JWTSecret, orgHandler.GetMine))
-	mux.Handle("GET /organizations/{id}", middleware.WithAuth(cfg.JWTSecret, orgHandler.GetByID))
-	mux.Handle("PUT /organizations/{id}", middleware.WithAuth(cfg.JWTSecret, orgHandler.Update))
-	mux.Handle("PATCH /organizations/{id}/logo", middleware.WithAuth(cfg.JWTSecret, orgHandler.UpdateLogo))
-	mux.Handle("DELETE /organizations/{id}", middleware.WithAuth(cfg.JWTSecret, orgHandler.Delete))
-
-	mux.Handle("POST /interview-types", middleware.WithAuth(cfg.JWTSecret, interviewTypeHandler.Create))
-	mux.Handle("GET /interview-types", middleware.WithAuth(cfg.JWTSecret, interviewTypeHandler.List))
-	mux.Handle("PUT /interview-types/{id}", middleware.WithAuth(cfg.JWTSecret, interviewTypeHandler.Update))
-
-	mux.Handle("PUT /availability", middleware.WithAuth(cfg.JWTSecret, availabilityHandler.Upsert))
-	mux.Handle("GET /availability", middleware.WithAuth(cfg.JWTSecret, availabilityHandler.Get))
+	server.Register(mux, cfg.JWTSecret, server.Handlers{
+		Health:        healthHandler,
+		Docs:          docsHandler,
+		Auth:          authHandler,
+		Organization:  orgHandler,
+		InterviewType: interviewTypeHandler,
+		Availability:  availabilityHandler,
+		Public:        publicHandler,
+	})
 
 	handler := middleware.RequestID(
 		middleware.Logging(logger, middleware.LoggingOptions{
@@ -94,14 +87,14 @@ func main() {
 		})(mux),
 	)
 
-	server := &http.Server{
+	httpServer := &http.Server{
 		Addr:    ":" + cfg.Port,
 		Handler: handler,
 	}
 
 	go func() {
 		slog.Info("server starting", "port", cfg.Port, "env", cfg.Env)
-		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("server failed", "err", err)
 			os.Exit(1)
 		}
@@ -113,7 +106,7 @@ func main() {
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := server.Shutdown(shutdownCtx); err != nil {
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		slog.Error("shutdown", "err", err)
 	}
 }
