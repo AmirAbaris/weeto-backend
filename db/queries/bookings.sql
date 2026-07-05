@@ -81,3 +81,52 @@ SET
     updated_at = NOW()
 WHERE id = $1
 RETURNING *;
+
+-- name: GetScheduledBookingByRescheduleToken :one
+SELECT
+    b.*,
+    s.start_at AS slot_start_at,
+    s.end_at AS slot_end_at
+FROM booking b
+JOIN slots s ON s.id = b.slot_id
+WHERE b.reschedule_token = $1
+  AND b.status = 'scheduled';
+
+-- name: GetScheduledBookingByRescheduleTokenForUpdate :one
+SELECT
+    b.*,
+    s.start_at AS slot_start_at,
+    s.end_at AS slot_end_at
+FROM booking b
+JOIN slots s ON s.id = b.slot_id
+WHERE b.reschedule_token = $1
+  AND b.status = 'scheduled'
+FOR UPDATE OF b;
+
+-- name: GetScheduledBookingByCancelToken :one
+SELECT
+    b.*,
+    s.start_at AS slot_start_at,
+    s.end_at AS slot_end_at
+FROM booking b
+JOIN slots s ON s.id = b.slot_id
+WHERE b.cancel_token = $1
+  AND b.status = 'scheduled';
+
+-- name: GetScheduledBookingByCancelTokenForUpdate :one
+SELECT
+    b.*,
+    s.start_at AS slot_start_at,
+    s.end_at AS slot_end_at
+FROM booking b
+JOIN slots s ON s.id = b.slot_id
+WHERE b.cancel_token = $1
+  AND b.status = 'scheduled'
+FOR UPDATE OF b;
+
+-- name: UpdateBookingSlot :one
+UPDATE booking
+SET slot_id = $2, updated_at = NOW()
+WHERE id = $1
+  AND status = 'scheduled'
+RETURNING *;

@@ -60,4 +60,8 @@ func Register(mux *http.ServeMux, jwtSecret string, h Handlers) {
 	mux.HandleFunc("GET /public/{orgSlug}/{typeSlug}", h.Public.GetMetadata)
 	mux.HandleFunc("GET /public/{orgSlug}/{typeSlug}/slots", h.Public.ListSlots)
 	mux.HandleFunc("POST /public/{orgSlug}/{typeSlug}/book", h.Public.Book)
+	mux.HandleFunc("GET /public/reschedule/{token}", h.Public.GetReschedule)
+	mux.HandleFunc("POST /public/reschedule/{token}", h.Public.PostReschedule)
+	mux.HandleFunc("GET /public/cancel/{token}", h.Public.GetCancel)
+	mux.HandleFunc("POST /public/cancel/{token}", h.Public.PostCancel)
 }

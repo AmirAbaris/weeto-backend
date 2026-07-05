@@ -88,6 +88,224 @@ func (q *Queries) GetBookingByID(ctx context.Context, id pgtype.UUID) (Booking, 
 	return i, err
 }
 
+const getScheduledBookingByCancelToken = `-- name: GetScheduledBookingByCancelToken :one
+SELECT
+    b.id, b.organization_id, b.interview_type_id, b.slot_id, b.candidate_name, b.candidate_phone, b.candidate_email, b.status, b.meet_link, b.calendar_event_id, b.reschedule_token, b.cancel_token, b.created_at, b.updated_at,
+    s.start_at AS slot_start_at,
+    s.end_at AS slot_end_at
+FROM booking b
+JOIN slots s ON s.id = b.slot_id
+WHERE b.cancel_token = $1
+  AND b.status = 'scheduled'
+`
+
+type GetScheduledBookingByCancelTokenRow struct {
+	ID              pgtype.UUID        `json:"id"`
+	OrganizationID  pgtype.UUID        `json:"organization_id"`
+	InterviewTypeID pgtype.UUID        `json:"interview_type_id"`
+	SlotID          pgtype.UUID        `json:"slot_id"`
+	CandidateName   string             `json:"candidate_name"`
+	CandidatePhone  string             `json:"candidate_phone"`
+	CandidateEmail  string             `json:"candidate_email"`
+	Status          BookingStatus      `json:"status"`
+	MeetLink        pgtype.Text        `json:"meet_link"`
+	CalendarEventID pgtype.Text        `json:"calendar_event_id"`
+	RescheduleToken string             `json:"reschedule_token"`
+	CancelToken     string             `json:"cancel_token"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	SlotStartAt     pgtype.Timestamptz `json:"slot_start_at"`
+	SlotEndAt       pgtype.Timestamptz `json:"slot_end_at"`
+}
+
+func (q *Queries) GetScheduledBookingByCancelToken(ctx context.Context, cancelToken string) (GetScheduledBookingByCancelTokenRow, error) {
+	row := q.db.QueryRow(ctx, getScheduledBookingByCancelToken, cancelToken)
+	var i GetScheduledBookingByCancelTokenRow
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.InterviewTypeID,
+		&i.SlotID,
+		&i.CandidateName,
+		&i.CandidatePhone,
+		&i.CandidateEmail,
+		&i.Status,
+		&i.MeetLink,
+		&i.CalendarEventID,
+		&i.RescheduleToken,
+		&i.CancelToken,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.SlotStartAt,
+		&i.SlotEndAt,
+	)
+	return i, err
+}
+
+const getScheduledBookingByCancelTokenForUpdate = `-- name: GetScheduledBookingByCancelTokenForUpdate :one
+SELECT
+    b.id, b.organization_id, b.interview_type_id, b.slot_id, b.candidate_name, b.candidate_phone, b.candidate_email, b.status, b.meet_link, b.calendar_event_id, b.reschedule_token, b.cancel_token, b.created_at, b.updated_at,
+    s.start_at AS slot_start_at,
+    s.end_at AS slot_end_at
+FROM booking b
+JOIN slots s ON s.id = b.slot_id
+WHERE b.cancel_token = $1
+  AND b.status = 'scheduled'
+FOR UPDATE OF b
+`
+
+type GetScheduledBookingByCancelTokenForUpdateRow struct {
+	ID              pgtype.UUID        `json:"id"`
+	OrganizationID  pgtype.UUID        `json:"organization_id"`
+	InterviewTypeID pgtype.UUID        `json:"interview_type_id"`
+	SlotID          pgtype.UUID        `json:"slot_id"`
+	CandidateName   string             `json:"candidate_name"`
+	CandidatePhone  string             `json:"candidate_phone"`
+	CandidateEmail  string             `json:"candidate_email"`
+	Status          BookingStatus      `json:"status"`
+	MeetLink        pgtype.Text        `json:"meet_link"`
+	CalendarEventID pgtype.Text        `json:"calendar_event_id"`
+	RescheduleToken string             `json:"reschedule_token"`
+	CancelToken     string             `json:"cancel_token"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	SlotStartAt     pgtype.Timestamptz `json:"slot_start_at"`
+	SlotEndAt       pgtype.Timestamptz `json:"slot_end_at"`
+}
+
+func (q *Queries) GetScheduledBookingByCancelTokenForUpdate(ctx context.Context, cancelToken string) (GetScheduledBookingByCancelTokenForUpdateRow, error) {
+	row := q.db.QueryRow(ctx, getScheduledBookingByCancelTokenForUpdate, cancelToken)
+	var i GetScheduledBookingByCancelTokenForUpdateRow
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.InterviewTypeID,
+		&i.SlotID,
+		&i.CandidateName,
+		&i.CandidatePhone,
+		&i.CandidateEmail,
+		&i.Status,
+		&i.MeetLink,
+		&i.CalendarEventID,
+		&i.RescheduleToken,
+		&i.CancelToken,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.SlotStartAt,
+		&i.SlotEndAt,
+	)
+	return i, err
+}
+
+const getScheduledBookingByRescheduleToken = `-- name: GetScheduledBookingByRescheduleToken :one
+SELECT
+    b.id, b.organization_id, b.interview_type_id, b.slot_id, b.candidate_name, b.candidate_phone, b.candidate_email, b.status, b.meet_link, b.calendar_event_id, b.reschedule_token, b.cancel_token, b.created_at, b.updated_at,
+    s.start_at AS slot_start_at,
+    s.end_at AS slot_end_at
+FROM booking b
+JOIN slots s ON s.id = b.slot_id
+WHERE b.reschedule_token = $1
+  AND b.status = 'scheduled'
+`
+
+type GetScheduledBookingByRescheduleTokenRow struct {
+	ID              pgtype.UUID        `json:"id"`
+	OrganizationID  pgtype.UUID        `json:"organization_id"`
+	InterviewTypeID pgtype.UUID        `json:"interview_type_id"`
+	SlotID          pgtype.UUID        `json:"slot_id"`
+	CandidateName   string             `json:"candidate_name"`
+	CandidatePhone  string             `json:"candidate_phone"`
+	CandidateEmail  string             `json:"candidate_email"`
+	Status          BookingStatus      `json:"status"`
+	MeetLink        pgtype.Text        `json:"meet_link"`
+	CalendarEventID pgtype.Text        `json:"calendar_event_id"`
+	RescheduleToken string             `json:"reschedule_token"`
+	CancelToken     string             `json:"cancel_token"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	SlotStartAt     pgtype.Timestamptz `json:"slot_start_at"`
+	SlotEndAt       pgtype.Timestamptz `json:"slot_end_at"`
+}
+
+func (q *Queries) GetScheduledBookingByRescheduleToken(ctx context.Context, rescheduleToken string) (GetScheduledBookingByRescheduleTokenRow, error) {
+	row := q.db.QueryRow(ctx, getScheduledBookingByRescheduleToken, rescheduleToken)
+	var i GetScheduledBookingByRescheduleTokenRow
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.InterviewTypeID,
+		&i.SlotID,
+		&i.CandidateName,
+		&i.CandidatePhone,
+		&i.CandidateEmail,
+		&i.Status,
+		&i.MeetLink,
+		&i.CalendarEventID,
+		&i.RescheduleToken,
+		&i.CancelToken,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.SlotStartAt,
+		&i.SlotEndAt,
+	)
+	return i, err
+}
+
+const getScheduledBookingByRescheduleTokenForUpdate = `-- name: GetScheduledBookingByRescheduleTokenForUpdate :one
+SELECT
+    b.id, b.organization_id, b.interview_type_id, b.slot_id, b.candidate_name, b.candidate_phone, b.candidate_email, b.status, b.meet_link, b.calendar_event_id, b.reschedule_token, b.cancel_token, b.created_at, b.updated_at,
+    s.start_at AS slot_start_at,
+    s.end_at AS slot_end_at
+FROM booking b
+JOIN slots s ON s.id = b.slot_id
+WHERE b.reschedule_token = $1
+  AND b.status = 'scheduled'
+FOR UPDATE OF b
+`
+
+type GetScheduledBookingByRescheduleTokenForUpdateRow struct {
+	ID              pgtype.UUID        `json:"id"`
+	OrganizationID  pgtype.UUID        `json:"organization_id"`
+	InterviewTypeID pgtype.UUID        `json:"interview_type_id"`
+	SlotID          pgtype.UUID        `json:"slot_id"`
+	CandidateName   string             `json:"candidate_name"`
+	CandidatePhone  string             `json:"candidate_phone"`
+	CandidateEmail  string             `json:"candidate_email"`
+	Status          BookingStatus      `json:"status"`
+	MeetLink        pgtype.Text        `json:"meet_link"`
+	CalendarEventID pgtype.Text        `json:"calendar_event_id"`
+	RescheduleToken string             `json:"reschedule_token"`
+	CancelToken     string             `json:"cancel_token"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	SlotStartAt     pgtype.Timestamptz `json:"slot_start_at"`
+	SlotEndAt       pgtype.Timestamptz `json:"slot_end_at"`
+}
+
+func (q *Queries) GetScheduledBookingByRescheduleTokenForUpdate(ctx context.Context, rescheduleToken string) (GetScheduledBookingByRescheduleTokenForUpdateRow, error) {
+	row := q.db.QueryRow(ctx, getScheduledBookingByRescheduleTokenForUpdate, rescheduleToken)
+	var i GetScheduledBookingByRescheduleTokenForUpdateRow
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.InterviewTypeID,
+		&i.SlotID,
+		&i.CandidateName,
+		&i.CandidatePhone,
+		&i.CandidateEmail,
+		&i.Status,
+		&i.MeetLink,
+		&i.CalendarEventID,
+		&i.RescheduleToken,
+		&i.CancelToken,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.SlotStartAt,
+		&i.SlotEndAt,
+	)
+	return i, err
+}
+
 const getScheduledBookingForUpdate = `-- name: GetScheduledBookingForUpdate :one
 SELECT b.id, b.organization_id, b.interview_type_id, b.slot_id, b.candidate_name, b.candidate_phone, b.candidate_email, b.status, b.meet_link, b.calendar_event_id, b.reschedule_token, b.cancel_token, b.created_at, b.updated_at
 FROM booking b
@@ -359,6 +577,41 @@ type UpdateBookingMeetInfoParams struct {
 
 func (q *Queries) UpdateBookingMeetInfo(ctx context.Context, arg UpdateBookingMeetInfoParams) (Booking, error) {
 	row := q.db.QueryRow(ctx, updateBookingMeetInfo, arg.ID, arg.MeetLink, arg.CalendarEventID)
+	var i Booking
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.InterviewTypeID,
+		&i.SlotID,
+		&i.CandidateName,
+		&i.CandidatePhone,
+		&i.CandidateEmail,
+		&i.Status,
+		&i.MeetLink,
+		&i.CalendarEventID,
+		&i.RescheduleToken,
+		&i.CancelToken,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateBookingSlot = `-- name: UpdateBookingSlot :one
+UPDATE booking
+SET slot_id = $2, updated_at = NOW()
+WHERE id = $1
+  AND status = 'scheduled'
+RETURNING id, organization_id, interview_type_id, slot_id, candidate_name, candidate_phone, candidate_email, status, meet_link, calendar_event_id, reschedule_token, cancel_token, created_at, updated_at
+`
+
+type UpdateBookingSlotParams struct {
+	ID     pgtype.UUID `json:"id"`
+	SlotID pgtype.UUID `json:"slot_id"`
+}
+
+func (q *Queries) UpdateBookingSlot(ctx context.Context, arg UpdateBookingSlotParams) (Booking, error) {
+	row := q.db.QueryRow(ctx, updateBookingSlot, arg.ID, arg.SlotID)
 	var i Booking
 	err := row.Scan(
 		&i.ID,

@@ -727,6 +727,120 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /public/reschedule/{token}:
+    get:
+      tags: [Public]
+      summary: Get reschedule page context
+      operationId: getPublicRescheduleContext
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: Booking details, candidate prefill, and available slots
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicRescheduleContextResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags: [Public]
+      summary: Reschedule a booking to a new slot
+      operationId: reschedulePublicBooking
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublicRescheduleRequest"
+      responses:
+        "200":
+          description: Booking rescheduled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicBookResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Within cutoff window before interview start
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Slot is no longer available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /public/cancel/{token}:
+    get:
+      tags: [Public]
+      summary: Get cancel confirmation context
+      operationId: getPublicCancelContext
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: Booking details for cancel confirmation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicCancelContextResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags: [Public]
+      summary: Cancel a booking via magic link
+      operationId: cancelPublicBooking
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "204":
+          description: Booking cancelled
+        "403":
+          description: Within cutoff window before interview start
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1301,6 +1415,77 @@ components:
           type: string
           format: uri
           description: Present when interview type uses google_meet and calendar event was created
+
+    PublicModifyBookingView:
+      type: object
+      required: [id, name, phone, email, start_at, end_at, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+          format: email
+        start_at:
+          type: string
+          format: date-time
+        end_at:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [scheduled]
+
+    PublicRescheduleContextResponse:
+      type: object
+      required: [booking, organization, interview_type, current_slot, slots, can_modify, cutoff_hours]
+      properties:
+        booking:
+          $ref: "#/components/schemas/PublicModifyBookingView"
+        organization:
+          $ref: "#/components/schemas/PublicOrganizationView"
+        interview_type:
+          $ref: "#/components/schemas/PublicInterviewTypeView"
+        current_slot:
+          $ref: "#/components/schemas/PublicSlot"
+        slots:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicSlot"
+        can_modify:
+          type: boolean
+          description: False when within cutoff_hours of interview start
+        cutoff_hours:
+          type: integer
+          example: 4
+
+    PublicCancelContextResponse:
+      type: object
+      required: [booking, organization, interview_type, can_modify, cutoff_hours]
+      properties:
+        booking:
+          $ref: "#/components/schemas/PublicModifyBookingView"
+        organization:
+          $ref: "#/components/schemas/PublicOrganizationView"
+        interview_type:
+          $ref: "#/components/schemas/PublicInterviewTypeView"
+        can_modify:
+          type: boolean
+        cutoff_hours:
+          type: integer
+          example: 4
+
+    PublicRescheduleRequest:
+      type: object
+      required: [slot_id]
+      properties:
+        slot_id:
+          type: string
+          format: uuid
 
   responses:
     BadRequest:

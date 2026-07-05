@@ -427,44 +427,7 @@ func (s *Service) Cancel(ctx context.Context, ownerID, bookingID pgtype.UUID) er
 		return err
 	}
 
-	cancelled, err := qtx.CancelBooking(ctx, db.CancelBookingParams{
-		ID:             bookingID,
-		OrganizationID: org.ID,
-	})
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrBookingNotFound
-		}
-		return err
-	}
-
-	if err := qtx.SetSlotBooked(ctx, db.SetSlotBookedParams{
-		ID:     booking.SlotID,
-		Booked: false,
-	}); err != nil {
-		return err
-	}
-
-	it, err := qtx.GetInterviewTypeByID(ctx, booking.InterviewTypeID)
-	if err != nil {
-		return err
-	}
-
-	slot, err := qtx.GetSlotByID(ctx, booking.SlotID)
-	if err != nil {
-		return err
-	}
-
-	payload, err := bookingPayload(org, it, cancelled, slot, "")
-	if err != nil {
-		return err
-	}
-
-	if _, err := qtx.InsertNotificationOutbox(ctx, db.InsertNotificationOutboxParams{
-		OrganizationID: org.ID,
-		EventType:      db.NotificationEventTypeBookingCancelled,
-		Payload:        payload,
-	}); err != nil {
+	if _, err := s.cancelScheduledBookingTx(ctx, qtx, org, booking); err != nil {
 		return err
 	}
 
@@ -472,11 +435,7 @@ func (s *Service) Cancel(ctx context.Context, ownerID, bookingID pgtype.UUID) er
 		return err
 	}
 
-	if booking.CalendarEventID.Valid && booking.CalendarEventID.String != "" {
-		if err := s.calendar.DeleteEvent(ctx, org.OwnerID, booking.CalendarEventID.String); err != nil {
-			slog.Error("delete calendar event failed", "booking_id", booking.ID, "event_id", booking.CalendarEventID.String, "err", err)
-		}
-	}
+	s.deleteCalendarEventIfPresent(ctx, org, booking)
 
 	return nil
 }

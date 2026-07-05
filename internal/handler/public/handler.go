@@ -153,6 +153,75 @@ func (h *Handler) Book(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJSON(w, http.StatusCreated, resp)
 }
 
+func (h *Handler) GetReschedule(w http.ResponseWriter, r *http.Request) {
+	ctx, err := h.svc.GetRescheduleContext(r.Context(), r.PathValue("token"))
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	httputil.WriteJSON(w, http.StatusOK, ctx)
+}
+
+type rescheduleRequest struct {
+	SlotID string `json:"slot_id"`
+}
+
+func (h *Handler) PostReschedule(w http.ResponseWriter, r *http.Request) {
+	var req rescheduleRequest
+	if err := httputil.DecodeJSON(r, &req); err != nil {
+		httputil.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	slotID, err := parseUUID(req.SlotID)
+	if err != nil {
+		httputil.WriteError(w, http.StatusBadRequest, "invalid slot id")
+		return
+	}
+
+	result, orgName, interviewTitle, err := h.svc.Reschedule(r.Context(), r.PathValue("token"), slotID)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
+	resp := bookResponse{
+		ID:               result.Booking.ID.String(),
+		SlotID:           result.Booking.SlotID.String(),
+		Name:             result.Booking.CandidateName,
+		Phone:            result.Booking.CandidatePhone,
+		Email:            result.Booking.CandidateEmail,
+		Status:           string(result.Booking.Status),
+		StartAt:          result.Slot.StartAt.Time.UTC(),
+		EndAt:            result.Slot.EndAt.Time.UTC(),
+		InterviewTitle:   interviewTitle,
+		OrganizationName: orgName,
+	}
+	if result.Booking.MeetLink.Valid {
+		meetLink := result.Booking.MeetLink.String
+		resp.MeetLink = &meetLink
+	}
+
+	httputil.WriteJSON(w, http.StatusOK, resp)
+}
+
+func (h *Handler) GetCancel(w http.ResponseWriter, r *http.Request) {
+	ctx, err := h.svc.GetCancelContext(r.Context(), r.PathValue("token"))
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	httputil.WriteJSON(w, http.StatusOK, ctx)
+}
+
+func (h *Handler) PostCancel(w http.ResponseWriter, r *http.Request) {
+	if err := h.svc.CancelByToken(r.Context(), r.PathValue("token")); err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func parseUUID(s string) (pgtype.UUID, error) {
 	var id pgtype.UUID
 	if err := id.Scan(s); err != nil {
@@ -191,6 +260,18 @@ func writeServiceError(w http.ResponseWriter, err error) {
 			Error: err.Error(),
 			Code:  "google_calendar_failed",
 		})
+	case errors.Is(err, bookingsvc.ErrTokenNotFound),
+		errors.Is(err, bookingsvc.ErrBookingNotFound):
+		httputil.WriteError(w, http.StatusNotFound, err.Error())
+	case errors.Is(err, bookingsvc.ErrModifyCutoff):
+		httputil.WriteErrorDetail(w, http.StatusForbidden, httputil.ErrorDetail{
+			Error: err.Error(),
+			Code:  "modify_cutoff",
+		})
+	case errors.Is(err, bookingsvc.ErrBookingNotModifiable):
+		httputil.WriteError(w, http.StatusConflict, err.Error())
+	case errors.Is(err, bookingsvc.ErrSameSlot):
+		httputil.WriteError(w, http.StatusBadRequest, err.Error())
 	default:
 		httputil.WriteError(w, http.StatusInternalServerError, "internal server error")
 	}
