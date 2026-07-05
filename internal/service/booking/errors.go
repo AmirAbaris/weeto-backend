@@ -14,4 +14,7 @@ var (
 	ErrBookingNotFound   = errors.New("booking not found")
 	ErrOrgRequired       = errors.New("organization required")
 	ErrForbidden         = errors.New("forbidden")
+	ErrGoogleNotConnected    = errors.New("connect google to use google meet interview types")
+	ErrMeetLinkLimitReached  = errors.New("free plan google meet link limit reached for this month")
+	ErrGoogleCalendarFailed  = errors.New("failed to create google calendar event")
 )

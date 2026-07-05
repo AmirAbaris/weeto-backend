@@ -7,11 +7,12 @@ import (
 )
 
 const (
-	minNameLen  = 1
-	maxNameLen  = 120
-	minPhoneLen = 5
-	maxPhoneLen = 32
-	maxEmailLen = 254
+	minNameLen                   = 1
+	maxNameLen                   = 120
+	minPhoneLen                  = 5
+	maxPhoneLen                  = 32
+	maxEmailLen                  = 254
+	freePlanMaxMeetLinksPerMonth = 15
 )
 
 var emailPattern = regexp.MustCompile(`^[^\s@]+@[^\s@]+\.[^\s@]+$`)

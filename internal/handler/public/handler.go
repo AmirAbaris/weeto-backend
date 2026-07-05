@@ -49,16 +49,17 @@ type bookRequest struct {
 }
 
 type bookResponse struct {
-	ID              string    `json:"id"`
-	SlotID          string    `json:"slot_id"`
-	Name            string    `json:"name"`
-	Phone           string    `json:"phone"`
-	Email           string    `json:"email"`
-	Status          string    `json:"status"`
-	StartAt         time.Time `json:"start_at"`
-	EndAt           time.Time `json:"end_at"`
-	InterviewTitle  string    `json:"interview_title"`
-	OrganizationName string   `json:"organization_name"`
+	ID               string    `json:"id"`
+	SlotID           string    `json:"slot_id"`
+	Name             string    `json:"name"`
+	Phone            string    `json:"phone"`
+	Email            string    `json:"email"`
+	Status           string    `json:"status"`
+	StartAt          time.Time `json:"start_at"`
+	EndAt            time.Time `json:"end_at"`
+	InterviewTitle   string    `json:"interview_title"`
+	OrganizationName string    `json:"organization_name"`
+	MeetLink         *string   `json:"meet_link,omitempty"`
 }
 
 func (h *Handler) GetMetadata(w http.ResponseWriter, r *http.Request) {
@@ -132,7 +133,7 @@ func (h *Handler) Book(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputil.WriteJSON(w, http.StatusCreated, bookResponse{
+	resp := bookResponse{
 		ID:               result.Booking.ID.String(),
 		SlotID:           result.Booking.SlotID.String(),
 		Name:             result.Booking.CandidateName,
@@ -143,7 +144,13 @@ func (h *Handler) Book(w http.ResponseWriter, r *http.Request) {
 		EndAt:            result.Slot.EndAt.Time.UTC(),
 		InterviewTitle:   meta.InterviewType.Title,
 		OrganizationName: meta.Organization.Name,
-	})
+	}
+	if result.Booking.MeetLink.Valid {
+		meetLink := result.Booking.MeetLink.String
+		resp.MeetLink = &meetLink
+	}
+
+	httputil.WriteJSON(w, http.StatusCreated, resp)
 }
 
 func parseUUID(s string) (pgtype.UUID, error) {
@@ -167,6 +174,23 @@ func writeServiceError(w http.ResponseWriter, err error) {
 		errors.Is(err, bookingsvc.ErrInvalidEmail),
 		errors.Is(err, bookingsvc.ErrInvalidSlotID):
 		httputil.WriteError(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, bookingsvc.ErrGoogleNotConnected):
+		httputil.WriteErrorDetail(w, http.StatusUnprocessableEntity, httputil.ErrorDetail{
+			Error:     err.Error(),
+			Code:      "google_not_connected",
+			Action:    "connect_google",
+			ActionURL: "/integrations/google/connect",
+		})
+	case errors.Is(err, bookingsvc.ErrMeetLinkLimitReached):
+		httputil.WriteErrorDetail(w, http.StatusForbidden, httputil.ErrorDetail{
+			Error: err.Error(),
+			Code:  "plan_limit_meet_links",
+		})
+	case errors.Is(err, bookingsvc.ErrGoogleCalendarFailed):
+		httputil.WriteErrorDetail(w, http.StatusUnprocessableEntity, httputil.ErrorDetail{
+			Error: err.Error(),
+			Code:  "google_calendar_failed",
+		})
 	default:
 		httputil.WriteError(w, http.StatusInternalServerError, "internal server error")
 	}

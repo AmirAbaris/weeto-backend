@@ -299,14 +299,16 @@ type NotificationOutbox struct {
 }
 
 type Organization struct {
-	ID        pgtype.UUID        `json:"id"`
-	Name      string             `json:"name"`
-	Slug      string             `json:"slug"`
-	LogoUrl   pgtype.Text        `json:"logo_url"`
-	OwnerID   pgtype.UUID        `json:"owner_id"`
-	Plan      PlanType           `json:"plan"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	ID                   pgtype.UUID        `json:"id"`
+	Name                 string             `json:"name"`
+	Slug                 string             `json:"slug"`
+	LogoUrl              pgtype.Text        `json:"logo_url"`
+	OwnerID              pgtype.UUID        `json:"owner_id"`
+	Plan                 PlanType           `json:"plan"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	MeetLinksUsed        int32              `json:"meet_links_used"`
+	MeetLinksPeriodStart pgtype.Timestamptz `json:"meet_links_period_start"`
 }
 
 type RefreshToken struct {
@@ -329,11 +331,13 @@ type Slot struct {
 }
 
 type User struct {
-	ID                pgtype.UUID        `json:"id"`
-	Email             string             `json:"email"`
-	PasswordHash      string             `json:"password_hash"`
-	LastLoginAt       pgtype.Timestamptz `json:"last_login_at"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
-	GoogleConnectedAt pgtype.Timestamptz `json:"google_connected_at"`
+	ID                 pgtype.UUID        `json:"id"`
+	Email              string             `json:"email"`
+	PasswordHash       string             `json:"password_hash"`
+	LastLoginAt        pgtype.Timestamptz `json:"last_login_at"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	GoogleConnectedAt  pgtype.Timestamptz `json:"google_connected_at"`
+	GoogleID           pgtype.Text        `json:"google_id"`
+	GoogleRefreshToken pgtype.Text        `json:"google_refresh_token"`
 }

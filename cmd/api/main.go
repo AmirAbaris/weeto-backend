@@ -19,13 +19,16 @@ import (
 	availabilityhandler "github.com/AmirAbaris/weeto-backend/internal/handler/availability"
 	interviewtypehandler "github.com/AmirAbaris/weeto-backend/internal/handler/interviewtype"
 	bookinghandler "github.com/AmirAbaris/weeto-backend/internal/handler/booking"
+	googlehandler "github.com/AmirAbaris/weeto-backend/internal/handler/google"
 	publichandler "github.com/AmirAbaris/weeto-backend/internal/handler/public"
 	"github.com/AmirAbaris/weeto-backend/internal/middleware"
 	applogger "github.com/AmirAbaris/weeto-backend/internal/platform/logger"
+	googleplatform "github.com/AmirAbaris/weeto-backend/internal/platform/google"
 	"github.com/AmirAbaris/weeto-backend/internal/server"
 	authsvc "github.com/AmirAbaris/weeto-backend/internal/service/auth"
 	availabilitysvc "github.com/AmirAbaris/weeto-backend/internal/service/availability"
 	bookingsvc "github.com/AmirAbaris/weeto-backend/internal/service/booking"
+	googlesvc "github.com/AmirAbaris/weeto-backend/internal/service/google"
 	orgsvc "github.com/AmirAbaris/weeto-backend/internal/service/organization"
 	interviewtypesvc "github.com/AmirAbaris/weeto-backend/internal/service/interviewtype"
 	slotsvc "github.com/AmirAbaris/weeto-backend/internal/service/slot"
@@ -66,7 +69,10 @@ func main() {
 	interviewTypeHandler := interviewtypehandler.NewHandler(interviewTypeService)
 	availabilityService := availabilitysvc.NewService(pool, queries, orgService, slotService)
 	availabilityHandler := availabilityhandler.NewHandler(availabilityService)
-	bookingService := bookingsvc.NewService(pool, queries, orgService, slotService)
+	googleCalendar := googleplatform.NewCalendarClient(cfg, queries)
+	googleService := googlesvc.NewService(cfg, queries)
+	googleHandler := googlehandler.NewHandler(cfg, googleService)
+	bookingService := bookingsvc.NewService(pool, queries, orgService, slotService, googleCalendar)
 	bookingHandler := bookinghandler.NewHandler(bookingService)
 	publicHandler := publichandler.NewHandler(bookingService)
 
@@ -80,6 +86,7 @@ func main() {
 		Availability:  availabilityHandler,
 		Booking:       bookingHandler,
 		Public:        publicHandler,
+		Google:        googleHandler,
 	})
 
 	handler := middleware.RequestID(

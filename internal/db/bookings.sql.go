@@ -340,3 +340,41 @@ func (q *Queries) MarkSlotBooked(ctx context.Context, id pgtype.UUID) (int64, er
 	}
 	return result.RowsAffected(), nil
 }
+
+const updateBookingMeetInfo = `-- name: UpdateBookingMeetInfo :one
+UPDATE booking
+SET
+    meet_link = $2,
+    calendar_event_id = $3,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING id, organization_id, interview_type_id, slot_id, candidate_name, candidate_phone, candidate_email, status, meet_link, calendar_event_id, reschedule_token, cancel_token, created_at, updated_at
+`
+
+type UpdateBookingMeetInfoParams struct {
+	ID              pgtype.UUID `json:"id"`
+	MeetLink        pgtype.Text `json:"meet_link"`
+	CalendarEventID pgtype.Text `json:"calendar_event_id"`
+}
+
+func (q *Queries) UpdateBookingMeetInfo(ctx context.Context, arg UpdateBookingMeetInfoParams) (Booking, error) {
+	row := q.db.QueryRow(ctx, updateBookingMeetInfo, arg.ID, arg.MeetLink, arg.CalendarEventID)
+	var i Booking
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.InterviewTypeID,
+		&i.SlotID,
+		&i.CandidateName,
+		&i.CandidatePhone,
+		&i.CandidateEmail,
+		&i.Status,
+		&i.MeetLink,
+		&i.CalendarEventID,
+		&i.RescheduleToken,
+		&i.CancelToken,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}

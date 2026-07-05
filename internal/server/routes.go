@@ -11,6 +11,7 @@ import (
 	interviewtypehandler "github.com/AmirAbaris/weeto-backend/internal/handler/interviewtype"
 	orghandler "github.com/AmirAbaris/weeto-backend/internal/handler/organization"
 	publichandler "github.com/AmirAbaris/weeto-backend/internal/handler/public"
+	googlehandler "github.com/AmirAbaris/weeto-backend/internal/handler/google"
 	"github.com/AmirAbaris/weeto-backend/internal/middleware"
 )
 
@@ -23,6 +24,7 @@ type Handlers struct {
 	Availability  *availabilityhandler.Handler
 	Booking       *bookinghandler.Handler
 	Public        *publichandler.Handler
+	Google        *googlehandler.Handler
 }
 
 func Register(mux *http.ServeMux, jwtSecret string, h Handlers) {
@@ -50,6 +52,10 @@ func Register(mux *http.ServeMux, jwtSecret string, h Handlers) {
 
 	mux.Handle("GET /bookings", middleware.WithAuth(jwtSecret, h.Booking.List))
 	mux.Handle("DELETE /bookings/{id}", middleware.WithAuth(jwtSecret, h.Booking.Cancel))
+
+	mux.Handle("GET /integrations/google/connect", middleware.WithAuth(jwtSecret, h.Google.Connect))
+	mux.HandleFunc("GET /integrations/google/callback", h.Google.Callback)
+	mux.Handle("DELETE /integrations/google", middleware.WithAuth(jwtSecret, h.Google.Disconnect))
 
 	mux.HandleFunc("GET /public/{orgSlug}/{typeSlug}", h.Public.GetMetadata)
 	mux.HandleFunc("GET /public/{orgSlug}/{typeSlug}/slots", h.Public.ListSlots)

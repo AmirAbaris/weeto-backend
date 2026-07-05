@@ -226,7 +226,7 @@ func newTestServer(t *testing.T, env *TestEnv) *httptest.Server {
 	slotSvc := env.SlotSvc
 	itSvc := interviewtypesvc.NewService(queries, orgSvc, slotSvc)
 	availSvc := availabilitysvc.NewService(env.Pool, queries, orgSvc, slotSvc)
-	bookingSvc := bookingsvc.NewService(env.Pool, queries, orgSvc, slotSvc)
+	bookingSvc := bookingsvc.NewService(env.Pool, queries, orgSvc, slotSvc, env.Calendar)
 	authSvc := authsvc.NewService(queries, cfg)
 
 	mux := http.NewServeMux()

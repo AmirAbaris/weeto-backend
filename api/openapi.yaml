@@ -28,6 +28,8 @@ tags:
     description: Recruiter availability and slot generation rules
   - name: Bookings
     description: Recruiter booking management
+  - name: Integrations
+    description: Third-party integrations (Google Calendar)
   - name: Public
     description: Public candidate booking (no authentication)
 
@@ -549,6 +551,66 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /integrations/google/connect:
+    get:
+      tags: [Integrations]
+      summary: Start Google OAuth connect flow
+      description: Redirects the recruiter to Google to authorize Calendar access.
+      operationId: connectGoogle
+      security:
+        - bearerAuth: []
+      responses:
+        "302":
+          description: Redirect to Google OAuth consent screen
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          description: Google integration not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /integrations/google/callback:
+    get:
+      tags: [Integrations]
+      summary: Google OAuth callback
+      description: Exchanges authorization code for refresh token and redirects to the frontend.
+      operationId: googleOAuthCallback
+      parameters:
+        - name: code
+          in: query
+          schema:
+            type: string
+        - name: state
+          in: query
+          schema:
+            type: string
+        - name: error
+          in: query
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to frontend integrations settings page
+
+  /integrations/google:
+    delete:
+      tags: [Integrations]
+      summary: Disconnect Google account
+      operationId: disconnectGoogle
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Google account disconnected
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /public/{orgSlug}/{typeSlug}:
     get:
       tags: [Public]
@@ -650,6 +712,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Free plan Google Meet monthly limit reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDetail"
+        "422":
+          description: Google account not connected or calendar event creation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDetail"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -1223,6 +1297,10 @@ components:
           type: string
         organization_name:
           type: string
+        meet_link:
+          type: string
+          format: uri
+          description: Present when interview type uses google_meet and calendar event was created
 
   responses:
     BadRequest:

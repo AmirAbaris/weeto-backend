@@ -19,6 +19,7 @@ import (
 	interviewtypesvc "github.com/AmirAbaris/weeto-backend/internal/service/interviewtype"
 	orgsvc "github.com/AmirAbaris/weeto-backend/internal/service/organization"
 	slotsvc "github.com/AmirAbaris/weeto-backend/internal/service/slot"
+	"github.com/AmirAbaris/weeto-backend/internal/platform/crypto"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -116,9 +117,14 @@ type TestEnv struct {
 	AvailSvc   *availabilitysvc.Service
 	ITSvc      *interviewtypesvc.Service
 	BookingSvc *bookingsvc.Service
+	Calendar   *MockCalendarClient
 }
 
 func NewTestEnv(t *testing.T, now time.Time) *TestEnv {
+	return NewTestEnvWithCalendar(t, now, &MockCalendarClient{})
+}
+
+func NewTestEnvWithCalendar(t *testing.T, now time.Time, calendar *MockCalendarClient) *TestEnv {
 	t.Helper()
 
 	pool := SetupTestDB(t)
@@ -130,7 +136,7 @@ func NewTestEnv(t *testing.T, now time.Time) *TestEnv {
 	slotSvc.Now = func() time.Time { return now }
 	availSvc := availabilitysvc.NewService(pool, queries, orgSvc, slotSvc)
 	itSvc := interviewtypesvc.NewService(queries, orgSvc, slotSvc)
-	bookingSvc := bookingsvc.NewService(pool, queries, orgSvc, slotSvc)
+	bookingSvc := bookingsvc.NewService(pool, queries, orgSvc, slotSvc, calendar)
 
 	userID := seedUser(t, queries)
 	orgID, orgSlug := seedOrg(t, queries, userID)
@@ -148,6 +154,7 @@ func NewTestEnv(t *testing.T, now time.Time) *TestEnv {
 		AvailSvc:   availSvc,
 		ITSvc:      itSvc,
 		BookingSvc: bookingSvc,
+		Calendar:   calendar,
 	}
 }
 
@@ -208,6 +215,52 @@ func (e *TestEnv) CreateInterviewType(duration, buffer int32) db.InterviewType {
 		e.T.Fatalf("regenerate slots: %v", err)
 	}
 	return it
+}
+
+var testEncryptionKey = []byte("01234567890123456789012345678901")
+
+func (e *TestEnv) ConnectGoogle() {
+	e.T.Helper()
+	encrypted, err := crypto.Encrypt([]byte("test-refresh-token"), testEncryptionKey)
+	if err != nil {
+		e.T.Fatal(err)
+	}
+	if err := e.Queries.SetUserGoogleConnection(e.Ctx, db.SetUserGoogleConnectionParams{
+		ID:                 e.UserID,
+		GoogleID:           pgtype.Text{String: "google-user-123", Valid: true},
+		GoogleRefreshToken: pgtype.Text{String: encrypted, Valid: true},
+	}); err != nil {
+		e.T.Fatal(err)
+	}
+}
+
+func (e *TestEnv) CreateGoogleMeetInterviewType(duration, buffer int32) db.InterviewType {
+	e.T.Helper()
+	e.ConnectGoogle()
+	slug := fmt.Sprintf("meet-type-%d", time.Now().UnixNano())
+	it, err := e.Queries.CreateInterviewType(e.Ctx, db.CreateInterviewTypeParams{
+		OrganizationID:  e.OrgID,
+		Title:           "Google Meet Interview",
+		Slug:            slug,
+		DurationMinutes: duration,
+		BufferMinutes:   buffer,
+		MeetingProvider: db.MeetingProviderGoogleMeet,
+	})
+	if err != nil {
+		e.T.Fatal(err)
+	}
+	if err := e.SlotSvc.RegenerateForType(e.Ctx, nil, e.OrgID, it.ID, duration, buffer); err != nil {
+		e.T.Fatalf("regenerate slots: %v", err)
+	}
+	return it
+}
+
+func (e *TestEnv) SetMeetLinksUsed(count int32) {
+	e.T.Helper()
+	_, err := e.Pool.Exec(e.Ctx, `UPDATE organization SET meet_links_used = $2 WHERE id = $1`, e.OrgID, count)
+	if err != nil {
+		e.T.Fatal(err)
+	}
 }
 
 func (e *TestEnv) ListSlots(typeID pgtype.UUID) []db.Slot {

@@ -72,3 +72,12 @@ WHERE id = $1
   AND organization_id = $2
   AND status = 'scheduled'
 RETURNING *;
+
+-- name: UpdateBookingMeetInfo :one
+UPDATE booking
+SET
+    meet_link = $2,
+    calendar_event_id = $3,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING *;

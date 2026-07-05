@@ -6,9 +6,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/AmirAbaris/weeto-backend/internal/db"
+	googleplatform "github.com/AmirAbaris/weeto-backend/internal/platform/google"
 	orgsvc "github.com/AmirAbaris/weeto-backend/internal/service/organization"
 	slotsvc "github.com/AmirAbaris/weeto-backend/internal/service/slot"
 	"github.com/jackc/pgx/v5"
@@ -18,14 +21,18 @@ import (
 )
 
 type Service struct {
-	pool    *pgxpool.Pool
-	q       *db.Queries
-	orgSvc  *orgsvc.Service
-	slotSvc *slotsvc.Service
+	pool     *pgxpool.Pool
+	q        *db.Queries
+	orgSvc   *orgsvc.Service
+	slotSvc  *slotsvc.Service
+	calendar googleplatform.CalendarClient
 }
 
-func NewService(pool *pgxpool.Pool, q *db.Queries, orgSvc *orgsvc.Service, slotSvc *slotsvc.Service) *Service {
-	return &Service{pool: pool, q: q, orgSvc: orgSvc, slotSvc: slotSvc}
+func NewService(pool *pgxpool.Pool, q *db.Queries, orgSvc *orgsvc.Service, slotSvc *slotsvc.Service, calendar googleplatform.CalendarClient) *Service {
+	if calendar == nil {
+		calendar = &googleplatform.NoopCalendar{}
+	}
+	return &Service{pool: pool, q: q, orgSvc: orgSvc, slotSvc: slotSvc, calendar: calendar}
 }
 
 type BookInput struct {
@@ -135,6 +142,13 @@ func (s *Service) Book(ctx context.Context, orgSlug, typeSlug string, in BookInp
 		return BookingResult{}, err
 	}
 
+	isGoogleMeet := meta.InterviewType.MeetingProvider == db.MeetingProviderGoogleMeet
+	if isGoogleMeet {
+		if err := s.ensureGoogleConnected(ctx, meta.Organization.OwnerID); err != nil {
+			return BookingResult{}, err
+		}
+	}
+
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return BookingResult{}, err
@@ -189,32 +203,149 @@ func (s *Service) Book(ctx context.Context, orgSlug, typeSlug string, in BookInp
 		return BookingResult{}, ErrSlotUnavailable
 	}
 
-	payload, err := bookingPayload(meta.Organization, meta.InterviewType, booking, slot)
+	payload, err := bookingPayload(meta.Organization, meta.InterviewType, booking, slot, "")
 	if err != nil {
 		return BookingResult{}, err
 	}
 
-	if _, err := qtx.InsertNotificationOutbox(ctx, db.InsertNotificationOutboxParams{
-		OrganizationID: meta.Organization.ID,
-		EventType:      db.NotificationEventTypeBookingCreated,
-		Payload:        payload,
-	}); err != nil {
-		return BookingResult{}, err
-	}
+	if !isGoogleMeet {
+		if _, err := qtx.InsertNotificationOutbox(ctx, db.InsertNotificationOutboxParams{
+			OrganizationID: meta.Organization.ID,
+			EventType:      db.NotificationEventTypeBookingCreated,
+			Payload:        payload,
+		}); err != nil {
+			return BookingResult{}, err
+		}
 
-	if _, err := qtx.InsertNotificationOutbox(ctx, db.InsertNotificationOutboxParams{
-		OrganizationID: meta.Organization.ID,
-		EventType:      db.NotificationEventTypeBookingCreated,
-		Payload:        payload,
-	}); err != nil {
-		return BookingResult{}, err
+		if _, err := qtx.InsertNotificationOutbox(ctx, db.InsertNotificationOutboxParams{
+			OrganizationID: meta.Organization.ID,
+			EventType:      db.NotificationEventTypeBookingCreated,
+			Payload:        payload,
+		}); err != nil {
+			return BookingResult{}, err
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return BookingResult{}, err
 	}
 
+	if isGoogleMeet {
+		booking, err = s.finalizeGoogleMeetBooking(ctx, meta, booking, slot)
+		if err != nil {
+			return BookingResult{}, err
+		}
+	}
+
 	return BookingResult{Booking: booking, Slot: slot}, nil
+}
+
+func (s *Service) finalizeGoogleMeetBooking(ctx context.Context, meta Metadata, booking db.Booking, slot db.Slot) (db.Booking, error) {
+	if err := s.q.ResetMeetLinksPeriodIfNeeded(ctx, meta.Organization.ID); err != nil {
+		s.compensatingCancel(ctx, meta.Organization, booking)
+		return db.Booking{}, err
+	}
+
+	if _, err := s.q.TryIncrementMeetLinksUsed(ctx, db.TryIncrementMeetLinksUsedParams{
+		ID:            meta.Organization.ID,
+		MeetLinksUsed: freePlanMaxMeetLinksPerMonth,
+	}); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			s.compensatingCancel(ctx, meta.Organization, booking)
+			return db.Booking{}, ErrMeetLinkLimitReached
+		}
+		s.compensatingCancel(ctx, meta.Organization, booking)
+		return db.Booking{}, err
+	}
+
+	event, err := s.calendar.CreateInterviewEvent(ctx, meta.Organization.OwnerID, googleplatform.EventInput{
+		Summary:        fmt.Sprintf("%s — %s", meta.InterviewType.Title, booking.CandidateName),
+		CandidateEmail: booking.CandidateEmail,
+		StartAt:        slot.StartAt.Time,
+		EndAt:          slot.EndAt.Time,
+	})
+	if err != nil {
+		_ = s.q.DecrementMeetLinksUsed(ctx, meta.Organization.ID)
+		s.compensatingCancel(ctx, meta.Organization, booking)
+		if errors.Is(err, googleplatform.ErrNotConnected) {
+			return db.Booking{}, ErrGoogleNotConnected
+		}
+		return db.Booking{}, ErrGoogleCalendarFailed
+	}
+
+	updated, err := s.q.UpdateBookingMeetInfo(ctx, db.UpdateBookingMeetInfoParams{
+		ID:              booking.ID,
+		MeetLink:        pgtype.Text{String: event.MeetLink, Valid: true},
+		CalendarEventID: pgtype.Text{String: event.EventID, Valid: true},
+	})
+	if err != nil {
+		_ = s.q.DecrementMeetLinksUsed(ctx, meta.Organization.ID)
+		_ = s.calendar.DeleteEvent(ctx, meta.Organization.OwnerID, event.EventID)
+		s.compensatingCancel(ctx, meta.Organization, booking)
+		return db.Booking{}, ErrGoogleCalendarFailed
+	}
+
+	payload, err := bookingPayload(meta.Organization, meta.InterviewType, updated, slot, event.MeetLink)
+	if err != nil {
+		return updated, err
+	}
+
+	for range 2 {
+		if _, err := s.q.InsertNotificationOutbox(ctx, db.InsertNotificationOutboxParams{
+			OrganizationID: meta.Organization.ID,
+			EventType:      db.NotificationEventTypeBookingCreated,
+			Payload:        payload,
+		}); err != nil {
+			return updated, err
+		}
+	}
+
+	return updated, nil
+}
+
+func (s *Service) compensatingCancel(ctx context.Context, org db.Organization, booking db.Booking) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		slog.Error("compensating cancel begin failed", "booking_id", booking.ID, "err", err)
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	qtx := s.q.WithTx(tx)
+
+	if _, err := qtx.CancelBooking(ctx, db.CancelBookingParams{
+		ID:             booking.ID,
+		OrganizationID: org.ID,
+	}); err != nil {
+		slog.Error("compensating cancel booking failed", "booking_id", booking.ID, "err", err)
+		return
+	}
+
+	if err := qtx.SetSlotBooked(ctx, db.SetSlotBookedParams{
+		ID:     booking.SlotID,
+		Booked: false,
+	}); err != nil {
+		slog.Error("compensating free slot failed", "booking_id", booking.ID, "err", err)
+		return
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		slog.Error("compensating cancel commit failed", "booking_id", booking.ID, "err", err)
+	}
+}
+
+func (s *Service) ensureGoogleConnected(ctx context.Context, ownerID pgtype.UUID) error {
+	connected, err := s.q.IsGoogleConnected(ctx, ownerID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrGoogleNotConnected
+		}
+		return err
+	}
+	if !connected {
+		return ErrGoogleNotConnected
+	}
+	return nil
 }
 
 func (s *Service) List(ctx context.Context, ownerID pgtype.UUID) (ListResult, error) {
@@ -324,7 +455,7 @@ func (s *Service) Cancel(ctx context.Context, ownerID, bookingID pgtype.UUID) er
 		return err
 	}
 
-	payload, err := bookingPayload(org, it, cancelled, slot)
+	payload, err := bookingPayload(org, it, cancelled, slot, "")
 	if err != nil {
 		return err
 	}
@@ -337,7 +468,17 @@ func (s *Service) Cancel(ctx context.Context, ownerID, bookingID pgtype.UUID) er
 		return err
 	}
 
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+
+	if booking.CalendarEventID.Valid && booking.CalendarEventID.String != "" {
+		if err := s.calendar.DeleteEvent(ctx, org.OwnerID, booking.CalendarEventID.String); err != nil {
+			slog.Error("delete calendar event failed", "booking_id", booking.ID, "event_id", booking.CalendarEventID.String, "err", err)
+		}
+	}
+
+	return nil
 }
 
 func (s *Service) slotWindow(ctx context.Context, orgID pgtype.UUID) (time.Time, time.Time, error) {
@@ -366,20 +507,25 @@ func (s *Service) orgLocation(ctx context.Context, orgID pgtype.UUID) (*time.Loc
 	return loc, nil
 }
 
-func bookingPayload(org db.Organization, it db.InterviewType, booking db.Booking, slot db.Slot) ([]byte, error) {
+func bookingPayload(org db.Organization, it db.InterviewType, booking db.Booking, slot db.Slot, meetLink string) ([]byte, error) {
 	data := map[string]any{
-		"booking_id":            booking.ID.String(),
-		"organization_name":     org.Name,
-		"organization_slug":     org.Slug,
-		"interview_type_title":  it.Title,
-		"interview_type_slug":   it.Slug,
-		"candidate_name":        booking.CandidateName,
-		"candidate_phone":       booking.CandidatePhone,
-		"candidate_email":       booking.CandidateEmail,
-		"slot_start_at":         slot.StartAt.Time.UTC().Format(time.RFC3339),
-		"slot_end_at":           slot.EndAt.Time.UTC().Format(time.RFC3339),
-		"reschedule_token":      booking.RescheduleToken,
-		"cancel_token":          booking.CancelToken,
+		"booking_id":           booking.ID.String(),
+		"organization_name":    org.Name,
+		"organization_slug":    org.Slug,
+		"interview_type_title": it.Title,
+		"interview_type_slug":  it.Slug,
+		"candidate_name":       booking.CandidateName,
+		"candidate_phone":      booking.CandidatePhone,
+		"candidate_email":      booking.CandidateEmail,
+		"slot_start_at":        slot.StartAt.Time.UTC().Format(time.RFC3339),
+		"slot_end_at":          slot.EndAt.Time.UTC().Format(time.RFC3339),
+		"reschedule_token":     booking.RescheduleToken,
+		"cancel_token":         booking.CancelToken,
+	}
+	if meetLink != "" {
+		data["meet_link"] = meetLink
+	} else if booking.MeetLink.Valid {
+		data["meet_link"] = booking.MeetLink.String
 	}
 	return json.Marshal(data)
 }
