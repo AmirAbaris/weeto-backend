@@ -270,6 +270,11 @@ func (s *Service) finalizeGoogleMeetBooking(ctx context.Context, meta Metadata, 
 		if errors.Is(err, googleplatform.ErrNotConnected) {
 			return db.Booking{}, ErrGoogleNotConnected
 		}
+		slog.Error("google calendar create failed",
+			"org_id", meta.Organization.ID,
+			"booking_id", booking.ID,
+			"err", err,
+		)
 		return db.Booking{}, ErrGoogleCalendarFailed
 	}
 
