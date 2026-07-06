@@ -67,7 +67,7 @@ func (h *Handler) Disconnect(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) frontendRedirect(status, detail string) string {
-	base := h.cfg.FrontendURL + "/settings/integrations"
+	base := h.cfg.FrontendURL + "/dashboard/settings"
 	if detail != "" {
 		return base + "?google=" + status + "&detail=" + detail
 	}
