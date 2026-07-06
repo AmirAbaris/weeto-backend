@@ -66,6 +66,22 @@ func (h *Handler) Disconnect(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		httputil.WriteError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	connected, err := h.svc.IsConnected(r.Context(), userID)
+	if err != nil {
+		httputil.WriteError(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	httputil.WriteJSON(w, http.StatusOK, map[string]bool{"connected": connected})
+}
+
 func (h *Handler) frontendRedirect(status, detail string) string {
 	base := h.cfg.FrontendURL + "/dashboard/settings"
 	if detail != "" {

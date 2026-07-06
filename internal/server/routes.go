@@ -54,6 +54,7 @@ func Register(mux *http.ServeMux, jwtSecret string, h Handlers) {
 	mux.Handle("DELETE /bookings/{id}", middleware.WithAuth(jwtSecret, h.Booking.Cancel))
 
 	mux.Handle("GET /integrations/google/connect", middleware.WithAuth(jwtSecret, h.Google.Connect))
+	mux.Handle("GET /integrations/google/status", middleware.WithAuth(jwtSecret, h.Google.Status))
 	mux.HandleFunc("GET /integrations/google/callback", h.Google.Callback)
 	mux.Handle("DELETE /integrations/google", middleware.WithAuth(jwtSecret, h.Google.Disconnect))
 

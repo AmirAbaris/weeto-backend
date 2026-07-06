@@ -83,6 +83,13 @@ func (s *Service) Disconnect(ctx context.Context, userID pgtype.UUID) error {
 	return s.q.ClearUserGoogleConnection(ctx, userID)
 }
 
+func (s *Service) IsConnected(ctx context.Context, userID pgtype.UUID) (bool, error) {
+	if !userID.Valid {
+		return false, errors.New("invalid user")
+	}
+	return s.q.IsGoogleConnected(ctx, userID)
+}
+
 func (s *Service) requireConfigured() error {
 	if s.cfg.GoogleClientID == "" || s.cfg.GoogleClientSecret == "" || s.cfg.GoogleRedirectURL == "" {
 		return ErrGoogleNotConfigured
