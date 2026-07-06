@@ -156,6 +156,46 @@ func (s *Service) Update(ctx context.Context, id, ownerID pgtype.UUID, in Input)
 	return updated, nil
 }
 
+func (s *Service) Delete(ctx context.Context, id, ownerID pgtype.UUID) error {
+	if !ownerID.Valid {
+		return ErrForbidden
+	}
+
+	org, err := s.orgSvc.GetByOwner(ctx, ownerID)
+	if err != nil {
+		if errors.Is(err, orgsvc.ErrOrgNotFound) {
+			return ErrOrgRequired
+		}
+		return err
+	}
+
+	if _, err := s.getForOrg(ctx, id, org.ID); err != nil {
+		return err
+	}
+
+	scheduled, err := s.q.CountScheduledBookingsByInterviewType(ctx, id)
+	if err != nil {
+		return err
+	}
+	if scheduled > 0 {
+		return ErrHasScheduledBookings
+	}
+
+	if err := s.q.DeleteInterviewType(ctx, id); err != nil {
+		return err
+	}
+
+	if s.slotSvc != nil {
+		if err := s.slotSvc.RegenerateForOrg(ctx, nil, org.ID); err != nil {
+			if !errors.Is(err, slotsvc.ErrAvailabilityNotConfigured) {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 func (s *Service) getForOrg(ctx context.Context, id, orgID pgtype.UUID) (db.InterviewType, error) {
 	item, err := s.q.GetInterviewTypeByID(ctx, id)
 	if err != nil {

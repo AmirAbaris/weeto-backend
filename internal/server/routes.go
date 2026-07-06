@@ -46,6 +46,7 @@ func Register(mux *http.ServeMux, jwtSecret string, h Handlers) {
 	mux.Handle("POST /interview-types", middleware.WithAuth(jwtSecret, h.InterviewType.Create))
 	mux.Handle("GET /interview-types", middleware.WithAuth(jwtSecret, h.InterviewType.List))
 	mux.Handle("PUT /interview-types/{id}", middleware.WithAuth(jwtSecret, h.InterviewType.Update))
+	mux.Handle("DELETE /interview-types/{id}", middleware.WithAuth(jwtSecret, h.InterviewType.Delete))
 
 	mux.Handle("PUT /availability", middleware.WithAuth(jwtSecret, h.Availability.Upsert))
 	mux.Handle("GET /availability", middleware.WithAuth(jwtSecret, h.Availability.Get))

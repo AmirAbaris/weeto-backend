@@ -440,6 +440,29 @@ paths:
                 $ref: "#/components/schemas/ErrorDetail"
         "500":
           $ref: "#/components/responses/InternalError"
+    delete:
+      tags: [InterviewTypes]
+      summary: Delete an interview type
+      operationId: deleteInterviewType
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Interview type deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Interview type has scheduled bookings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDetail"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /availability:
     put:

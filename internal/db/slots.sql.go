@@ -41,11 +41,14 @@ func (q *Queries) CountSlotsByOrgOnLocalDay(ctx context.Context, arg CountSlotsB
 }
 
 const deleteUnbookedSlotsByOrgInWindow = `-- name: DeleteUnbookedSlotsByOrgInWindow :exec
-DELETE FROM slots
-WHERE organization_id = $1
-  AND booked = FALSE
-  AND start_at >= $2
-  AND start_at < $3
+DELETE FROM slots AS s
+WHERE s.organization_id = $1
+  AND s.booked = FALSE
+  AND s.start_at >= $2
+  AND s.start_at < $3
+  AND NOT EXISTS (
+    SELECT 1 FROM booking b WHERE b.slot_id = s.id
+  )
 `
 
 type DeleteUnbookedSlotsByOrgInWindowParams struct {
@@ -60,11 +63,14 @@ func (q *Queries) DeleteUnbookedSlotsByOrgInWindow(ctx context.Context, arg Dele
 }
 
 const deleteUnbookedSlotsByTypeInWindow = `-- name: DeleteUnbookedSlotsByTypeInWindow :exec
-DELETE FROM slots
-WHERE interview_type_id = $1
-  AND booked = FALSE
-  AND start_at >= $2
-  AND start_at < $3
+DELETE FROM slots AS s
+WHERE s.interview_type_id = $1
+  AND s.booked = FALSE
+  AND s.start_at >= $2
+  AND s.start_at < $3
+  AND NOT EXISTS (
+    SELECT 1 FROM booking b WHERE b.slot_id = s.id
+  )
 `
 
 type DeleteUnbookedSlotsByTypeInWindowParams struct {

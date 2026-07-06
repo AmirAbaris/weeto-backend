@@ -24,6 +24,20 @@ func (q *Queries) CountInterviewTypesByOrg(ctx context.Context, organizationID p
 	return column_1, err
 }
 
+const countScheduledBookingsByInterviewType = `-- name: CountScheduledBookingsByInterviewType :one
+SELECT COUNT(*)::int
+FROM booking
+WHERE interview_type_id = $1
+  AND status = 'scheduled'
+`
+
+func (q *Queries) CountScheduledBookingsByInterviewType(ctx context.Context, interviewTypeID pgtype.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, countScheduledBookingsByInterviewType, interviewTypeID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createInterviewType = `-- name: CreateInterviewType :one
 INSERT INTO interview_type (
     organization_id,
@@ -72,6 +86,16 @@ func (q *Queries) CreateInterviewType(ctx context.Context, arg CreateInterviewTy
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const deleteInterviewType = `-- name: DeleteInterviewType :exec
+DELETE FROM interview_type
+WHERE id = $1
+`
+
+func (q *Queries) DeleteInterviewType(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteInterviewType, id)
+	return err
 }
 
 const getInterviewTypeByID = `-- name: GetInterviewTypeByID :one
