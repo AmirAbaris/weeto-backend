@@ -57,7 +57,7 @@ func TestRescheduleSuccess(t *testing.T) {
 		t.Fatal("expected available slots")
 	}
 
-	rescheduled, _, _, err := env.BookingSvc.Reschedule(env.Ctx, result.Booking.RescheduleToken, slotB.ID)
+	rescheduled, _, _, _, err := env.BookingSvc.Reschedule(env.Ctx, result.Booking.RescheduleToken, slotB.ID)
 	if err != nil {
 		t.Fatalf("reschedule: %v", err)
 	}
@@ -123,7 +123,7 @@ func TestRescheduleCutoffBlocked(t *testing.T) {
 	}
 
 	target := slotAtLocalHour(t, env, it, loc, 15)
-	_, _, _, err = env.BookingSvc.Reschedule(env.Ctx, result.Booking.RescheduleToken, target.ID)
+	_, _, _, _, err = env.BookingSvc.Reschedule(env.Ctx, result.Booking.RescheduleToken, target.ID)
 	if err == nil {
 		t.Fatal("expected cutoff error")
 	}
@@ -140,7 +140,7 @@ func TestRescheduleInvalidToken(t *testing.T) {
 		t.Fatalf("get err = %v", err)
 	}
 
-	_, _, _, err = env.BookingSvc.Reschedule(env.Ctx, "invalid-token", pgtype.UUID{Valid: true, Bytes: [16]byte{1}})
+	_, _, _, _, err = env.BookingSvc.Reschedule(env.Ctx, "invalid-token", pgtype.UUID{Valid: true, Bytes: [16]byte{1}})
 	if err != bookingsvc.ErrTokenNotFound {
 		t.Fatalf("post err = %v", err)
 	}
@@ -186,7 +186,7 @@ func TestRescheduleSlotConflict(t *testing.T) {
 		go func(tok string) {
 			defer wg.Done()
 			<-start
-			_, _, _, err := env.BookingSvc.Reschedule(env.Ctx, tok, target)
+			_, _, _, _, err := env.BookingSvc.Reschedule(env.Ctx, tok, target)
 			errs <- err
 		}(token)
 	}

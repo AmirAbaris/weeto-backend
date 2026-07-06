@@ -92,17 +92,17 @@ func (s *Service) GetRescheduleContext(ctx context.Context, token string) (Resch
 	}, nil
 }
 
-func (s *Service) Reschedule(ctx context.Context, token string, newSlotID pgtype.UUID) (BookingResult, string, string, error) {
+func (s *Service) Reschedule(ctx context.Context, token string, newSlotID pgtype.UUID) (BookingResult, string, string, *string, error) {
 	if token == "" {
-		return BookingResult{}, "", "", ErrTokenNotFound
+		return BookingResult{}, "", "", nil, ErrTokenNotFound
 	}
 	if !newSlotID.Valid {
-		return BookingResult{}, "", "", ErrInvalidSlotID
+		return BookingResult{}, "", "", nil, ErrInvalidSlotID
 	}
 
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return BookingResult{}, "", "", err
+		return BookingResult{}, "", "", nil, err
 	}
 	defer tx.Rollback(ctx)
 
@@ -111,22 +111,22 @@ func (s *Service) Reschedule(ctx context.Context, token string, newSlotID pgtype
 	row, err := qtx.GetScheduledBookingByRescheduleTokenForUpdate(ctx, token)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return BookingResult{}, "", "", ErrTokenNotFound
+			return BookingResult{}, "", "", nil, ErrTokenNotFound
 		}
-		return BookingResult{}, "", "", err
+		return BookingResult{}, "", "", nil, err
 	}
 
 	if !s.canModifyBooking(row.SlotStartAt.Time) {
-		return BookingResult{}, "", "", ErrModifyCutoff
+		return BookingResult{}, "", "", nil, ErrModifyCutoff
 	}
 
 	if row.SlotID == newSlotID {
-		return BookingResult{}, "", "", ErrSameSlot
+		return BookingResult{}, "", "", nil, ErrSameSlot
 	}
 
 	oldSlot, err := qtx.GetSlotByID(ctx, row.SlotID)
 	if err != nil {
-		return BookingResult{}, "", "", err
+		return BookingResult{}, "", "", nil, err
 	}
 
 	newSlot, err := qtx.GetSlotForUpdate(ctx, db.GetSlotForUpdateParams{
@@ -136,24 +136,24 @@ func (s *Service) Reschedule(ctx context.Context, token string, newSlotID pgtype
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return BookingResult{}, "", "", ErrSlotUnavailable
+			return BookingResult{}, "", "", nil, ErrSlotUnavailable
 		}
-		return BookingResult{}, "", "", err
+		return BookingResult{}, "", "", nil, err
 	}
 
 	if err := qtx.SetSlotBooked(ctx, db.SetSlotBookedParams{
 		ID:     oldSlot.ID,
 		Booked: false,
 	}); err != nil {
-		return BookingResult{}, "", "", err
+		return BookingResult{}, "", "", nil, err
 	}
 
 	rows, err := qtx.MarkSlotBooked(ctx, newSlot.ID)
 	if err != nil {
-		return BookingResult{}, "", "", err
+		return BookingResult{}, "", "", nil, err
 	}
 	if rows == 0 {
-		return BookingResult{}, "", "", ErrSlotUnavailable
+		return BookingResult{}, "", "", nil, ErrSlotUnavailable
 	}
 
 	updated, err := qtx.UpdateBookingSlot(ctx, db.UpdateBookingSlotParams{
@@ -162,19 +162,19 @@ func (s *Service) Reschedule(ctx context.Context, token string, newSlotID pgtype
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return BookingResult{}, "", "", ErrBookingNotModifiable
+			return BookingResult{}, "", "", nil, ErrBookingNotModifiable
 		}
-		return BookingResult{}, "", "", err
+		return BookingResult{}, "", "", nil, err
 	}
 
 	org, it, err := s.loadBookingMetaTx(ctx, qtx, row.OrganizationID, row.InterviewTypeID)
 	if err != nil {
-		return BookingResult{}, "", "", err
+		return BookingResult{}, "", "", nil, err
 	}
 
 	payload, err := reschedulePayload(org, it, updated, newSlot, oldSlot)
 	if err != nil {
-		return BookingResult{}, "", "", err
+		return BookingResult{}, "", "", nil, err
 	}
 
 	if _, err := qtx.InsertNotificationOutbox(ctx, db.InsertNotificationOutboxParams{
@@ -182,11 +182,11 @@ func (s *Service) Reschedule(ctx context.Context, token string, newSlotID pgtype
 		EventType:      db.NotificationEventTypeBookingRescheduled,
 		Payload:        payload,
 	}); err != nil {
-		return BookingResult{}, "", "", err
+		return BookingResult{}, "", "", nil, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return BookingResult{}, "", "", err
+		return BookingResult{}, "", "", nil, err
 	}
 
 	if updated.CalendarEventID.Valid && updated.CalendarEventID.String != "" {
@@ -200,7 +200,7 @@ func (s *Service) Reschedule(ctx context.Context, token string, newSlotID pgtype
 		}
 	}
 
-	return BookingResult{Booking: updated, Slot: newSlot}, org.Name, it.Title, nil
+	return BookingResult{Booking: updated, Slot: newSlot}, org.Name, it.Title, MeetingLocationFromType(it), nil
 }
 
 func (s *Service) GetCancelContext(ctx context.Context, token string) (CancelContext, error) {

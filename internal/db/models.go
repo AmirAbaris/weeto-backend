@@ -57,8 +57,7 @@ type MeetingProvider string
 
 const (
 	MeetingProviderGoogleMeet MeetingProvider = "google_meet"
-	MeetingProviderBaleLink   MeetingProvider = "bale_link"
-	MeetingProviderCustomUrl  MeetingProvider = "custom_url"
+	MeetingProviderOnSite     MeetingProvider = "on_site"
 )
 
 func (e *MeetingProvider) Scan(src interface{}) error {

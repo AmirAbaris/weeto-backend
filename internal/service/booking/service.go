@@ -471,6 +471,14 @@ func (s *Service) orgLocation(ctx context.Context, orgID pgtype.UUID) (*time.Loc
 	return loc, nil
 }
 
+func MeetingLocationFromType(it db.InterviewType) *string {
+	if it.MeetingProvider != db.MeetingProviderOnSite || !it.MeetingUrl.Valid {
+		return nil
+	}
+	loc := it.MeetingUrl.String
+	return &loc
+}
+
 func bookingPayload(org db.Organization, it db.InterviewType, booking db.Booking, slot db.Slot, meetLink string) ([]byte, error) {
 	data := map[string]any{
 		"booking_id":           booking.ID.String(),
@@ -490,6 +498,9 @@ func bookingPayload(org db.Organization, it db.InterviewType, booking db.Booking
 		data["meet_link"] = meetLink
 	} else if booking.MeetLink.Valid {
 		data["meet_link"] = booking.MeetLink.String
+	}
+	if it.MeetingProvider == db.MeetingProviderOnSite && it.MeetingUrl.Valid {
+		data["meeting_location"] = it.MeetingUrl.String
 	}
 	return json.Marshal(data)
 }

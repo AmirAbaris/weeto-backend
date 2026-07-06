@@ -1061,8 +1061,8 @@ components:
 
     MeetingProvider:
       type: string
-      enum: [google_meet, bale_link, custom_url]
-      example: bale_link
+      enum: [google_meet, on_site]
+      example: on_site
 
     InterviewTypeRequest:
       type: object
@@ -1093,10 +1093,9 @@ components:
           $ref: "#/components/schemas/MeetingProvider"
         meeting_url:
           type: string
-          format: uri
           nullable: true
-          description: Required for bale_link and custom_url; must be omitted for google_meet
-          example: https://ble.ir/join/abc
+          description: Required for on_site (address text); must be omitted for google_meet
+          example: تهران، خیابان ولیعصر، پلاک ۱۲
 
     InterviewTypeResponse:
       type: object
@@ -1289,7 +1288,11 @@ components:
           example: 0
         meeting_provider:
           type: string
-          enum: [google_meet, bale_link, custom_url]
+          enum: [google_meet, on_site]
+        meeting_location:
+          type: string
+          nullable: true
+          description: Present when meeting_provider is on_site
 
     PublicMetadataResponse:
       type: object
@@ -1438,6 +1441,9 @@ components:
           type: string
           format: uri
           description: Present when interview type uses google_meet and calendar event was created
+        meeting_location:
+          type: string
+          description: Present when interview type uses on_site
 
     PublicModifyBookingView:
       type: object

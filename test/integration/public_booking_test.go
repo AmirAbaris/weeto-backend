@@ -95,6 +95,49 @@ func TestBookSuccess(t *testing.T) {
 	}
 }
 
+func TestOnSiteBooking(t *testing.T) {
+	now := mondayMorningTehran(t)
+	env := NewTestEnv(t, now)
+
+	it := env.CreateInterviewType(60, 0)
+	env.UpsertAvailability(fixtures.Monday9to17(50))
+
+	slot := env.FirstAvailableSlot(it)
+	result, err := env.BookingSvc.Book(env.Ctx, env.OrgSlug, it.Slug, bookingsvc.BookInput{
+		SlotID: slot.ID,
+		Name:   "Ali Rezaei",
+		Phone:  "+989121234567",
+		Email:  "ali@example.com",
+	})
+	if err != nil {
+		t.Fatalf("book: %v", err)
+	}
+
+	if result.Booking.MeetLink.Valid {
+		t.Fatalf("meet_link should be empty for on_site, got %q", result.Booking.MeetLink.String)
+	}
+
+	outbox, err := env.Queries.ListNotificationOutboxByOrg(env.Ctx, env.OrgID)
+	if err != nil {
+		t.Fatalf("list outbox: %v", err)
+	}
+	if len(outbox) != 2 {
+		t.Fatalf("outbox rows = %d, want 2", len(outbox))
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(outbox[0].Payload, &payload); err != nil {
+		t.Fatalf("unmarshal payload: %v", err)
+	}
+	if payload["meet_link"] != nil {
+		t.Fatalf("payload meet_link = %v, want nil", payload["meet_link"])
+	}
+	loc, ok := payload["meeting_location"].(string)
+	if !ok || loc != "تهران، خیابان ولیعصر، پلاک ۱۲" {
+		t.Fatalf("meeting_location = %v, want on-site address", payload["meeting_location"])
+	}
+}
+
 func TestBookConcurrentConflict(t *testing.T) {
 	now := mondayMorningTehran(t)
 	env := NewTestEnv(t, now)

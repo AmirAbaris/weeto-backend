@@ -1,7 +1,6 @@
 package interviewtype
 
 import (
-	"net/url"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -68,12 +67,8 @@ func validateMeetingProvider(provider db.MeetingProvider, meetingURL *string) er
 		if meetingURL != nil && strings.TrimSpace(*meetingURL) != "" {
 			return ErrInvalidMeetingURL
 		}
-	case db.MeetingProviderBaleLink, db.MeetingProviderCustomUrl:
+	case db.MeetingProviderOnSite:
 		if meetingURL == nil || strings.TrimSpace(*meetingURL) == "" {
-			return ErrInvalidMeetingURL
-		}
-		u, err := url.ParseRequestURI(strings.TrimSpace(*meetingURL))
-		if err != nil || u.Scheme == "" || u.Host == "" {
 			return ErrInvalidMeetingURL
 		}
 	default:

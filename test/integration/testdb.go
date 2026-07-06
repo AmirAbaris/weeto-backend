@@ -205,8 +205,8 @@ func (e *TestEnv) CreateInterviewType(duration, buffer int32) db.InterviewType {
 		Slug:            slug,
 		DurationMinutes: duration,
 		BufferMinutes:   buffer,
-		MeetingProvider: db.MeetingProviderCustomUrl,
-		MeetingUrl:      pgtype.Text{String: "https://example.com/meet", Valid: true},
+		MeetingProvider: db.MeetingProviderOnSite,
+		MeetingUrl:      pgtype.Text{String: "تهران، خیابان ولیعصر، پلاک ۱۲", Valid: true},
 	})
 	if err != nil {
 		e.T.Fatal(err)

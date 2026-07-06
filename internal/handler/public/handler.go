@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/AmirAbaris/weeto-backend/internal/handler/httputil"
+	"github.com/AmirAbaris/weeto-backend/internal/db"
 	bookingsvc "github.com/AmirAbaris/weeto-backend/internal/service/booking"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -30,11 +31,12 @@ type organizationView struct {
 }
 
 type interviewTypeView struct {
-	Title           string `json:"title"`
-	Slug            string `json:"slug"`
-	DurationMinutes int32  `json:"duration_minutes"`
-	BufferMinutes   int32  `json:"buffer_minutes"`
-	MeetingProvider string `json:"meeting_provider"`
+	Title            string  `json:"title"`
+	Slug             string  `json:"slug"`
+	DurationMinutes  int32   `json:"duration_minutes"`
+	BufferMinutes    int32   `json:"buffer_minutes"`
+	MeetingProvider  string  `json:"meeting_provider"`
+	MeetingLocation  *string `json:"meeting_location,omitempty"`
 }
 
 type slotsResponse struct {
@@ -60,6 +62,7 @@ type bookResponse struct {
 	InterviewTitle   string    `json:"interview_title"`
 	OrganizationName string    `json:"organization_name"`
 	MeetLink         *string   `json:"meet_link,omitempty"`
+	MeetingLocation  *string   `json:"meeting_location,omitempty"`
 }
 
 func (h *Handler) GetMetadata(w http.ResponseWriter, r *http.Request) {
@@ -74,13 +77,7 @@ func (h *Handler) GetMetadata(w http.ResponseWriter, r *http.Request) {
 			Name: meta.Organization.Name,
 			Slug: meta.Organization.Slug,
 		},
-		InterviewType: interviewTypeView{
-			Title:           meta.InterviewType.Title,
-			Slug:            meta.InterviewType.Slug,
-			DurationMinutes: meta.InterviewType.DurationMinutes,
-			BufferMinutes:   meta.InterviewType.BufferMinutes,
-			MeetingProvider: string(meta.InterviewType.MeetingProvider),
-		},
+		InterviewType: toInterviewTypeView(meta.InterviewType),
 	}
 	if meta.Organization.LogoUrl.Valid {
 		logo := meta.Organization.LogoUrl.String
@@ -149,6 +146,7 @@ func (h *Handler) Book(w http.ResponseWriter, r *http.Request) {
 		meetLink := result.Booking.MeetLink.String
 		resp.MeetLink = &meetLink
 	}
+	resp.MeetingLocation = bookingsvc.MeetingLocationFromType(meta.InterviewType)
 
 	httputil.WriteJSON(w, http.StatusCreated, resp)
 }
@@ -179,7 +177,7 @@ func (h *Handler) PostReschedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, orgName, interviewTitle, err := h.svc.Reschedule(r.Context(), r.PathValue("token"), slotID)
+	result, orgName, interviewTitle, meetingLocation, err := h.svc.Reschedule(r.Context(), r.PathValue("token"), slotID)
 	if err != nil {
 		writeServiceError(w, err)
 		return
@@ -201,6 +199,7 @@ func (h *Handler) PostReschedule(w http.ResponseWriter, r *http.Request) {
 		meetLink := result.Booking.MeetLink.String
 		resp.MeetLink = &meetLink
 	}
+	resp.MeetingLocation = meetingLocation
 
 	httputil.WriteJSON(w, http.StatusOK, resp)
 }
@@ -220,6 +219,18 @@ func (h *Handler) PostCancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func toInterviewTypeView(it db.InterviewType) interviewTypeView {
+	view := interviewTypeView{
+		Title:           it.Title,
+		Slug:            it.Slug,
+		DurationMinutes: it.DurationMinutes,
+		BufferMinutes:   it.BufferMinutes,
+		MeetingProvider: string(it.MeetingProvider),
+	}
+	view.MeetingLocation = bookingsvc.MeetingLocationFromType(it)
+	return view
 }
 
 func parseUUID(s string) (pgtype.UUID, error) {
