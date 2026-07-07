@@ -286,6 +286,51 @@ func TestCancelByTokenSuccess(t *testing.T) {
 	}
 }
 
+func TestRebookAfterCancelByToken(t *testing.T) {
+	env := NewTestEnv(t, mondayMorningTehran(t))
+	it := env.CreateInterviewType(60, 0)
+	env.UpsertAvailability(fixtures.Monday9to17(50))
+	slot := env.FirstAvailableSlot(it)
+
+	first, err := env.BookingSvc.Book(env.Ctx, env.OrgSlug, it.Slug, bookingsvc.BookInput{
+		SlotID: slot.ID,
+		Name:   "First Booking",
+		Phone:  "+989121234567",
+		Email:  "first@example.com",
+	})
+	if err != nil {
+		t.Fatalf("book: %v", err)
+	}
+
+	if err := env.BookingSvc.CancelByToken(env.Ctx, first.Booking.CancelToken); err != nil {
+		t.Fatalf("cancel: %v", err)
+	}
+
+	second, err := env.BookingSvc.Book(env.Ctx, env.OrgSlug, it.Slug, bookingsvc.BookInput{
+		SlotID: slot.ID,
+		Name:   "Second Booking",
+		Phone:  "+989129876543",
+		Email:  "second@example.com",
+	})
+	if err != nil {
+		t.Fatalf("rebook: %v", err)
+	}
+	if second.Booking.ID == first.Booking.ID {
+		t.Fatal("expected a new booking row after rebook")
+	}
+	if second.Booking.Status != db.BookingStatusScheduled {
+		t.Fatalf("status = %q, want scheduled", second.Booking.Status)
+	}
+
+	stored, err := env.Queries.GetSlotByID(env.Ctx, slot.ID)
+	if err != nil {
+		t.Fatalf("get slot: %v", err)
+	}
+	if !stored.Booked {
+		t.Fatal("expected slot to be booked again")
+	}
+}
+
 func TestCancelByTokenCutoffBlocked(t *testing.T) {
 	loc := tehran(t)
 	now := time.Date(2026, 7, 6, 10, 0, 0, 0, loc)

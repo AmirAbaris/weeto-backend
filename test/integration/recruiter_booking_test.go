@@ -180,6 +180,19 @@ func TestCancelBookingFreesSlot(t *testing.T) {
 	if cancelled != 2 {
 		t.Fatalf("booking_cancelled outbox rows = %d, want 2", cancelled)
 	}
+
+	second, err := env.BookingSvc.Book(env.Ctx, env.OrgSlug, it.Slug, bookingsvc.BookInput{
+		SlotID: slot.ID,
+		Name:   "Rebooked",
+		Phone:  "+989129876543",
+		Email:  "rebook@example.com",
+	})
+	if err != nil {
+		t.Fatalf("rebook: %v", err)
+	}
+	if second.Booking.ID == result.Booking.ID {
+		t.Fatal("expected a new booking row after rebook")
+	}
 }
 
 func TestCancelBookingNotFound(t *testing.T) {

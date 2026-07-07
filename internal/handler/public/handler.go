@@ -28,6 +28,7 @@ type organizationView struct {
 	Name    string  `json:"name"`
 	Slug    string  `json:"slug"`
 	LogoURL *string `json:"logo_url,omitempty"`
+	Plan    string  `json:"plan"`
 }
 
 type interviewTypeView struct {
@@ -76,6 +77,7 @@ func (h *Handler) GetMetadata(w http.ResponseWriter, r *http.Request) {
 		Organization: organizationView{
 			Name: meta.Organization.Name,
 			Slug: meta.Organization.Slug,
+			Plan: string(meta.Organization.Plan),
 		},
 		InterviewType: toInterviewTypeView(meta.InterviewType),
 	}

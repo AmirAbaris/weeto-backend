@@ -1257,7 +1257,7 @@ components:
 
     PublicOrganizationView:
       type: object
-      required: [name, slug]
+      required: [name, slug, plan]
       properties:
         name:
           type: string
@@ -1269,6 +1269,8 @@ components:
           type: string
           format: uri
           nullable: true
+        plan:
+          $ref: "#/components/schemas/PlanType"
 
     PublicInterviewTypeView:
       type: object
