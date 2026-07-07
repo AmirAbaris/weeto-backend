@@ -2,7 +2,6 @@ package booking
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"time"
@@ -172,7 +171,7 @@ func (s *Service) Reschedule(ctx context.Context, token string, newSlotID pgtype
 		return BookingResult{}, "", "", nil, err
 	}
 
-	payload, err := reschedulePayload(org, it, updated, newSlot, oldSlot)
+	payload, err := rescheduleNotificationPayload(ctx, qtx, org, it, updated, newSlot, oldSlot)
 	if err != nil {
 		return BookingResult{}, "", "", nil, err
 	}
@@ -261,7 +260,7 @@ func (s *Service) CancelByToken(ctx context.Context, token string) error {
 	}
 
 	booking := cancelRowToBooking(row)
-	result, err := s.cancelScheduledBookingTx(ctx, qtx, org, booking)
+	result, err := s.cancelScheduledBookingTx(ctx, qtx, org, booking, cancelledByCandidate)
 	if err != nil {
 		return err
 	}
@@ -281,7 +280,7 @@ type cancelTxResult struct {
 	slot      db.Slot
 }
 
-func (s *Service) cancelScheduledBookingTx(ctx context.Context, qtx *db.Queries, org db.Organization, booking db.Booking) (cancelTxResult, error) {
+func (s *Service) cancelScheduledBookingTx(ctx context.Context, qtx *db.Queries, org db.Organization, booking db.Booking, by cancelledBy) (cancelTxResult, error) {
 	cancelled, err := qtx.CancelBooking(ctx, db.CancelBookingParams{
 		ID:             booking.ID,
 		OrganizationID: org.ID,
@@ -310,16 +309,7 @@ func (s *Service) cancelScheduledBookingTx(ctx context.Context, qtx *db.Queries,
 		return cancelTxResult{}, err
 	}
 
-	payload, err := bookingPayload(org, it, cancelled, slot, "")
-	if err != nil {
-		return cancelTxResult{}, err
-	}
-
-	if _, err := qtx.InsertNotificationOutbox(ctx, db.InsertNotificationOutboxParams{
-		OrganizationID: org.ID,
-		EventType:      db.NotificationEventTypeBookingCancelled,
-		Payload:        payload,
-	}); err != nil {
+	if err := insertCancelNotifications(ctx, qtx, org, it, cancelled, slot, by); err != nil {
 		return cancelTxResult{}, err
 	}
 
@@ -422,19 +412,4 @@ func cancelRowToBooking(row db.GetScheduledBookingByCancelTokenForUpdateRow) db.
 		CreatedAt:       row.CreatedAt,
 		UpdatedAt:       row.UpdatedAt,
 	}
-}
-
-func reschedulePayload(org db.Organization, it db.InterviewType, booking db.Booking, slot, prevSlot db.Slot) ([]byte, error) {
-	payload, err := bookingPayload(org, it, booking, slot, "")
-	if err != nil {
-		return nil, err
-	}
-
-	var data map[string]any
-	if err := json.Unmarshal(payload, &data); err != nil {
-		return nil, err
-	}
-	data["previous_slot_start_at"] = prevSlot.StartAt.Time.UTC().Format(time.RFC3339)
-	data["previous_slot_end_at"] = prevSlot.EndAt.Time.UTC().Format(time.RFC3339)
-	return json.Marshal(data)
 }

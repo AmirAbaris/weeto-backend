@@ -15,8 +15,11 @@ const claimPendingNotifications = `-- name: ClaimPendingNotifications :many
 SELECT id, organization_id, event_type, payload, status, retry_count, created_at, processed_at
 FROM notification_outbox
 WHERE status = 'pending'
-  AND event_type = 'booking_created'
-  AND payload->>'recipient' = 'candidate'
+  AND (
+    (event_type = 'booking_created' AND payload->>'recipient' = 'candidate')
+    OR (event_type = 'booking_rescheduled' AND payload->>'recipient' = 'candidate')
+    OR (event_type = 'booking_cancelled' AND payload->>'recipient' IN ('candidate', 'recruiter'))
+  )
 ORDER BY created_at
 LIMIT $1
 FOR UPDATE SKIP LOCKED

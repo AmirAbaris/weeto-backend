@@ -94,6 +94,19 @@ func TestRescheduleSuccess(t *testing.T) {
 	if rescheduledCount != 1 {
 		t.Fatalf("booking_rescheduled outbox rows = %d, want 1", rescheduledCount)
 	}
+
+	for _, row := range outbox {
+		if row.EventType != db.NotificationEventTypeBookingRescheduled {
+			continue
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(row.Payload, &payload); err != nil {
+			t.Fatalf("unmarshal payload: %v", err)
+		}
+		if payload["recipient"] != "candidate" {
+			t.Fatalf("recipient = %v, want candidate", payload["recipient"])
+		}
+	}
 }
 
 func TestRescheduleCutoffBlocked(t *testing.T) {
@@ -268,8 +281,8 @@ func TestCancelByTokenSuccess(t *testing.T) {
 			cancelledCount++
 		}
 	}
-	if cancelledCount != 1 {
-		t.Fatalf("booking_cancelled outbox rows = %d, want 1", cancelledCount)
+	if cancelledCount != 2 {
+		t.Fatalf("booking_cancelled outbox rows = %d, want 2", cancelledCount)
 	}
 }
 

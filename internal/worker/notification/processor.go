@@ -81,23 +81,30 @@ func (p *Processor) ProcessRow(ctx context.Context, row db.NotificationOutbox) e
 }
 
 func (p *Processor) processRow(ctx context.Context, qtx *db.Queries, row db.NotificationOutbox) error {
+	_ = qtx
+
+	var meta struct {
+		Recipient string `json:"recipient"`
+	}
+	if err := json.Unmarshal(row.Payload, &meta); err != nil {
+		return err
+	}
+
 	switch row.EventType {
 	case db.NotificationEventTypeBookingCreated:
-		return p.sendBookingConfirmation(ctx, row.Payload)
+		return p.sendBookingConfirmation(ctx, row.Payload, meta.Recipient)
+	case db.NotificationEventTypeBookingRescheduled:
+		return p.sendBookingRescheduled(ctx, row.Payload, meta.Recipient)
+	case db.NotificationEventTypeBookingCancelled:
+		return p.sendBookingCancelled(ctx, row.Payload, meta.Recipient)
 	default:
 		return fmt.Errorf("unsupported event type: %s", row.EventType)
 	}
 }
 
-func (p *Processor) sendBookingConfirmation(ctx context.Context, payload []byte) error {
-	var meta struct {
-		Recipient string `json:"recipient"`
-	}
-	if err := json.Unmarshal(payload, &meta); err != nil {
-		return err
-	}
-	if meta.Recipient != "candidate" {
-		return fmt.Errorf("unexpected recipient: %s", meta.Recipient)
+func (p *Processor) sendBookingConfirmation(ctx context.Context, payload []byte, recipient string) error {
+	if recipient != "candidate" {
+		return fmt.Errorf("unexpected recipient: %s", recipient)
 	}
 
 	data, err := email.ParseBookingConfirmationPayload(payload, p.frontendURL)
@@ -108,6 +115,43 @@ func (p *Processor) sendBookingConfirmation(ctx context.Context, payload []byte)
 		return fmt.Errorf("candidate_email is required")
 	}
 
-	msg := email.BookingConfirmationMessage(data)
-	return p.sender.Send(ctx, msg)
+	return p.sender.Send(ctx, email.BookingConfirmationMessage(data))
+}
+
+func (p *Processor) sendBookingRescheduled(ctx context.Context, payload []byte, recipient string) error {
+	if recipient != "candidate" {
+		return fmt.Errorf("unexpected recipient: %s", recipient)
+	}
+
+	data, err := email.ParseBookingNotificationPayload(payload, p.frontendURL)
+	if err != nil {
+		return err
+	}
+	if data.CandidateEmail == "" {
+		return fmt.Errorf("candidate_email is required")
+	}
+
+	return p.sender.Send(ctx, email.BookingRescheduledMessage(data))
+}
+
+func (p *Processor) sendBookingCancelled(ctx context.Context, payload []byte, recipient string) error {
+	data, err := email.ParseBookingNotificationPayload(payload, p.frontendURL)
+	if err != nil {
+		return err
+	}
+
+	switch recipient {
+	case "candidate":
+		if data.CandidateEmail == "" {
+			return fmt.Errorf("candidate_email is required")
+		}
+		return p.sender.Send(ctx, email.BookingCancelledCandidateMessage(data))
+	case "recruiter":
+		if data.RecruiterEmail == "" {
+			return fmt.Errorf("recruiter_email is required")
+		}
+		return p.sender.Send(ctx, email.BookingCancelledRecruiterMessage(data))
+	default:
+		return fmt.Errorf("unexpected recipient: %s", recipient)
+	}
 }

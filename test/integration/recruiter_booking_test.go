@@ -177,8 +177,8 @@ func TestCancelBookingFreesSlot(t *testing.T) {
 			cancelled++
 		}
 	}
-	if cancelled != 1 {
-		t.Fatalf("booking_cancelled outbox rows = %d, want 1", cancelled)
+	if cancelled != 2 {
+		t.Fatalf("booking_cancelled outbox rows = %d, want 2", cancelled)
 	}
 }
 

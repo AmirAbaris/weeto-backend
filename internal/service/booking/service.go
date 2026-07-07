@@ -203,11 +203,11 @@ func (s *Service) Book(ctx context.Context, orgSlug, typeSlug string, in BookInp
 		return BookingResult{}, ErrSlotUnavailable
 	}
 
-	payloadCandidate, err := bookingPayloadWithRecipient(meta.Organization, meta.InterviewType, booking, slot, "", "candidate")
+	payloadCandidate, err := notificationPayload(ctx, qtx, meta.Organization, meta.InterviewType, booking, slot, "", "candidate", nil)
 	if err != nil {
 		return BookingResult{}, err
 	}
-	payloadRecruiter, err := bookingPayloadWithRecipient(meta.Organization, meta.InterviewType, booking, slot, "", "recruiter")
+	payloadRecruiter, err := notificationPayload(ctx, qtx, meta.Organization, meta.InterviewType, booking, slot, "", "recruiter", nil)
 	if err != nil {
 		return BookingResult{}, err
 	}
@@ -294,11 +294,11 @@ func (s *Service) finalizeGoogleMeetBooking(ctx context.Context, meta Metadata, 
 		return db.Booking{}, ErrGoogleCalendarFailed
 	}
 
-	payloadCandidate, err := bookingPayloadWithRecipient(meta.Organization, meta.InterviewType, updated, slot, event.MeetLink, "candidate")
+	payloadCandidate, err := notificationPayload(ctx, s.q, meta.Organization, meta.InterviewType, updated, slot, event.MeetLink, "candidate", nil)
 	if err != nil {
 		return updated, err
 	}
-	payloadRecruiter, err := bookingPayloadWithRecipient(meta.Organization, meta.InterviewType, updated, slot, event.MeetLink, "recruiter")
+	payloadRecruiter, err := notificationPayload(ctx, s.q, meta.Organization, meta.InterviewType, updated, slot, event.MeetLink, "recruiter", nil)
 	if err != nil {
 		return updated, err
 	}
@@ -440,7 +440,7 @@ func (s *Service) Cancel(ctx context.Context, ownerID, bookingID pgtype.UUID) er
 		return err
 	}
 
-	if _, err := s.cancelScheduledBookingTx(ctx, qtx, org, booking); err != nil {
+	if _, err := s.cancelScheduledBookingTx(ctx, qtx, org, booking, cancelledByRecruiter); err != nil {
 		return err
 	}
 
@@ -510,19 +510,6 @@ func bookingPayload(org db.Organization, it db.InterviewType, booking db.Booking
 	if it.MeetingProvider == db.MeetingProviderOnSite && it.MeetingUrl.Valid {
 		data["meeting_location"] = it.MeetingUrl.String
 	}
-	return json.Marshal(data)
-}
-
-func bookingPayloadWithRecipient(org db.Organization, it db.InterviewType, booking db.Booking, slot db.Slot, meetLink, recipient string) ([]byte, error) {
-	payload, err := bookingPayload(org, it, booking, slot, meetLink)
-	if err != nil {
-		return nil, err
-	}
-	var data map[string]any
-	if err := json.Unmarshal(payload, &data); err != nil {
-		return nil, err
-	}
-	data["recipient"] = recipient
 	return json.Marshal(data)
 }
 

@@ -57,3 +57,91 @@ func TestProcessor_SendBookingConfirmationToCandidate(t *testing.T) {
 		t.Fatalf("html missing cancel link")
 	}
 }
+
+func TestProcessor_SendBookingRescheduledToCandidate(t *testing.T) {
+	sender := &recordingSender{}
+	processor := notification.NewProcessor(nil, nil, sender, "http://localhost:3000")
+
+	payload := []byte(`{
+		"recipient": "candidate",
+		"candidate_name": "Ali",
+		"candidate_email": "ali@example.com",
+		"organization_name": "Acme",
+		"interview_type_title": "Backend Interview",
+		"slot_start_at": "2026-07-07T11:00:00Z",
+		"slot_end_at": "2026-07-07T12:00:00Z",
+		"previous_slot_start_at": "2026-07-07T10:00:00Z",
+		"previous_slot_end_at": "2026-07-07T11:00:00Z",
+		"reschedule_token": "reschedule-token",
+		"cancel_token": "cancel-token"
+	}`)
+
+	row := db.NotificationOutbox{
+		EventType: db.NotificationEventTypeBookingRescheduled,
+		Payload:   payload,
+	}
+
+	if err := processor.ProcessRow(context.Background(), row); err != nil {
+		t.Fatalf("process row: %v", err)
+	}
+	if sender.messages[0].To != "ali@example.com" {
+		t.Fatalf("to = %q", sender.messages[0].To)
+	}
+	if !strings.Contains(sender.messages[0].HTML, "تغییر کرد") {
+		t.Fatalf("html missing reschedule copy")
+	}
+}
+
+func TestProcessor_SendBookingCancelled(t *testing.T) {
+	sender := &recordingSender{}
+	processor := notification.NewProcessor(nil, nil, sender, "http://localhost:3000")
+
+	for _, tc := range []struct {
+		recipient string
+		to        string
+		payload   string
+	}{
+		{
+			recipient: "candidate",
+			to:        "ali@example.com",
+			payload: `{
+				"recipient": "candidate",
+				"candidate_name": "Ali",
+				"candidate_email": "ali@example.com",
+				"recruiter_email": "recruiter@example.com",
+				"organization_name": "Acme",
+				"interview_type_title": "Backend Interview",
+				"slot_start_at": "2026-07-07T10:00:00Z",
+				"slot_end_at": "2026-07-07T11:00:00Z"
+			}`,
+		},
+		{
+			recipient: "recruiter",
+			to:        "recruiter@example.com",
+			payload: `{
+				"recipient": "recruiter",
+				"candidate_name": "Ali",
+				"candidate_email": "ali@example.com",
+				"candidate_phone": "+989121234567",
+				"recruiter_email": "recruiter@example.com",
+				"organization_name": "Acme",
+				"interview_type_title": "Backend Interview",
+				"slot_start_at": "2026-07-07T10:00:00Z",
+				"slot_end_at": "2026-07-07T11:00:00Z",
+				"cancelled_by": "candidate"
+			}`,
+		},
+	} {
+		sender.messages = nil
+		row := db.NotificationOutbox{
+			EventType: db.NotificationEventTypeBookingCancelled,
+			Payload:   []byte(tc.payload),
+		}
+		if err := processor.ProcessRow(context.Background(), row); err != nil {
+			t.Fatalf("process row %s: %v", tc.recipient, err)
+		}
+		if len(sender.messages) != 1 || sender.messages[0].To != tc.to {
+			t.Fatalf("%s: got %+v, want to %s", tc.recipient, sender.messages, tc.to)
+		}
+	}
+}
