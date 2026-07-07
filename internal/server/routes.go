@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	authhandler "github.com/AmirAbaris/weeto-backend/internal/handler/auth"
+	adminhandler "github.com/AmirAbaris/weeto-backend/internal/handler/admin"
 	availabilityhandler "github.com/AmirAbaris/weeto-backend/internal/handler/availability"
 	bookinghandler "github.com/AmirAbaris/weeto-backend/internal/handler/booking"
 	docshandler "github.com/AmirAbaris/weeto-backend/internal/handler/docs"
@@ -19,6 +20,7 @@ type Handlers struct {
 	Health        *health.Handler
 	Docs          *docshandler.Handler
 	Auth          *authhandler.Handler
+	Admin         *adminhandler.Handler
 	Organization  *orghandler.Handler
 	InterviewType *interviewtypehandler.Handler
 	Availability  *availabilityhandler.Handler
@@ -27,7 +29,7 @@ type Handlers struct {
 	Google        *googlehandler.Handler
 }
 
-func Register(mux *http.ServeMux, jwtSecret string, h Handlers) {
+func Register(mux *http.ServeMux, jwtSecret, adminAPIKey string, h Handlers) {
 	mux.HandleFunc("GET /docs", h.Docs.UI)
 	mux.HandleFunc("GET /openapi.yaml", h.Docs.Spec)
 	mux.HandleFunc("GET /health", h.Health.Live)
@@ -42,6 +44,10 @@ func Register(mux *http.ServeMux, jwtSecret string, h Handlers) {
 	mux.Handle("PUT /organizations/{id}", middleware.WithAuth(jwtSecret, h.Organization.Update))
 	mux.Handle("PATCH /organizations/{id}/logo", middleware.WithAuth(jwtSecret, h.Organization.UpdateLogo))
 	mux.Handle("DELETE /organizations/{id}", middleware.WithAuth(jwtSecret, h.Organization.Delete))
+
+	if adminAPIKey != "" {
+		mux.Handle("PATCH /admin/organizations/{id}/plan", middleware.WithAdminKey(adminAPIKey, h.Admin.UpdatePlan))
+	}
 
 	mux.Handle("POST /interview-types", middleware.WithAuth(jwtSecret, h.InterviewType.Create))
 	mux.Handle("GET /interview-types", middleware.WithAuth(jwtSecret, h.InterviewType.List))

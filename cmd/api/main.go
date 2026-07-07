@@ -13,6 +13,7 @@ import (
 	"github.com/AmirAbaris/weeto-backend/internal/config"
 	"github.com/AmirAbaris/weeto-backend/internal/db"
 	authhandler "github.com/AmirAbaris/weeto-backend/internal/handler/auth"
+	adminhandler "github.com/AmirAbaris/weeto-backend/internal/handler/admin"
 	docshandler "github.com/AmirAbaris/weeto-backend/internal/handler/docs"
 	"github.com/AmirAbaris/weeto-backend/internal/handler/health"
 	orghandler "github.com/AmirAbaris/weeto-backend/internal/handler/organization"
@@ -64,6 +65,7 @@ func main() {
 	authHandler := authhandler.NewHandler(authService)
 	orgService := orgsvc.NewService(queries, cfg)
 	orgHandler := orghandler.NewHandler(orgService)
+	adminHandler := adminhandler.NewHandler(orgService)
 	slotService := slotsvc.NewService(queries)
 	interviewTypeService := interviewtypesvc.NewService(queries, orgService, slotService)
 	interviewTypeHandler := interviewtypehandler.NewHandler(interviewTypeService)
@@ -77,10 +79,11 @@ func main() {
 	publicHandler := publichandler.NewHandler(bookingService)
 
 	mux := http.NewServeMux()
-	server.Register(mux, cfg.JWTSecret, server.Handlers{
+	server.Register(mux, cfg.JWTSecret, cfg.AdminAPIKey, server.Handlers{
 		Health:        healthHandler,
 		Docs:          docsHandler,
 		Auth:          authHandler,
+		Admin:         adminHandler,
 		Organization:  orgHandler,
 		InterviewType: interviewTypeHandler,
 		Availability:  availabilityHandler,

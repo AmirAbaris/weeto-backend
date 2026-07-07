@@ -208,7 +208,6 @@ SET
     name = $2,
     slug = $3,
     logo_url = $4,
-    plan = $5,
     updated_at = NOW()
 WHERE id = $1
 RETURNING id, name, slug, logo_url, owner_id, plan, created_at, updated_at, meet_links_used, meet_links_period_start
@@ -219,7 +218,6 @@ type UpdateOrganizationParams struct {
 	Name    string      `json:"name"`
 	Slug    string      `json:"slug"`
 	LogoUrl pgtype.Text `json:"logo_url"`
-	Plan    PlanType    `json:"plan"`
 }
 
 func (q *Queries) UpdateOrganization(ctx context.Context, arg UpdateOrganizationParams) (Organization, error) {
@@ -228,7 +226,6 @@ func (q *Queries) UpdateOrganization(ctx context.Context, arg UpdateOrganization
 		arg.Name,
 		arg.Slug,
 		arg.LogoUrl,
-		arg.Plan,
 	)
 	var i Organization
 	err := row.Scan(
@@ -262,6 +259,38 @@ type UpdateOrganizationLogoParams struct {
 
 func (q *Queries) UpdateOrganizationLogo(ctx context.Context, arg UpdateOrganizationLogoParams) (Organization, error) {
 	row := q.db.QueryRow(ctx, updateOrganizationLogo, arg.ID, arg.LogoUrl)
+	var i Organization
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.LogoUrl,
+		&i.OwnerID,
+		&i.Plan,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.MeetLinksUsed,
+		&i.MeetLinksPeriodStart,
+	)
+	return i, err
+}
+
+const updateOrganizationPlan = `-- name: UpdateOrganizationPlan :one
+UPDATE organization
+SET
+    plan = $2,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING id, name, slug, logo_url, owner_id, plan, created_at, updated_at, meet_links_used, meet_links_period_start
+`
+
+type UpdateOrganizationPlanParams struct {
+	ID   pgtype.UUID `json:"id"`
+	Plan PlanType    `json:"plan"`
+}
+
+func (q *Queries) UpdateOrganizationPlan(ctx context.Context, arg UpdateOrganizationPlanParams) (Organization, error) {
+	row := q.db.QueryRow(ctx, updateOrganizationPlan, arg.ID, arg.Plan)
 	var i Organization
 	err := row.Scan(
 		&i.ID,

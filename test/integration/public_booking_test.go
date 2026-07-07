@@ -281,7 +281,7 @@ func newTestServer(t *testing.T, env *TestEnv) *httptest.Server {
 	authSvc := authsvc.NewService(queries, cfg)
 
 	mux := http.NewServeMux()
-	server.Register(mux, cfg.JWTSecret, server.Handlers{
+	server.Register(mux, cfg.JWTSecret, "", server.Handlers{
 		Health:        health.NewHandler(),
 		Docs:          docshandler.NewHandler(),
 		Auth:          authhandler.NewHandler(authSvc),

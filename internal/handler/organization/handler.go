@@ -27,10 +27,9 @@ type createOrgRequest struct {
 }
 
 type updateOrgRequest struct {
-	Name    string      `json:"name"`
-	Slug    string      `json:"slug"`
-	LogoURL *string     `json:"logo_url,omitempty"`
-	Plan    db.PlanType `json:"plan,omitempty"`
+	Name    string  `json:"name"`
+	Slug    string  `json:"slug"`
+	LogoURL *string `json:"logo_url,omitempty"`
 }
 
 type updateLogoRequest struct {
@@ -127,7 +126,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	org, err := h.svc.UpdateOrg(r.Context(), id, ownerID, req.Name, req.Slug, req.LogoURL, req.Plan)
+	org, err := h.svc.UpdateOrg(r.Context(), id, ownerID, req.Name, req.Slug, req.LogoURL)
 	if err != nil {
 		writeServiceError(w, err)
 		return

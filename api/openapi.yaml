@@ -287,6 +287,44 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /admin/organizations/{id}/plan:
+    parameters:
+      - $ref: "#/components/parameters/OrganizationID"
+    patch:
+      tags: [Admin]
+      summary: Update organization plan (internal)
+      description: Requires ADMIN_API_KEY as Bearer token. Use for wishlist / early-access upgrades until billing is live.
+      operationId: adminUpdateOrganizationPlan
+      security:
+        - adminAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateOrganizationPlanRequest"
+      responses:
+        "200":
+          description: Plan updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          description: Admin API not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /organizations/{id}/logo:
     parameters:
       - $ref: "#/components/parameters/OrganizationID"
@@ -873,6 +911,10 @@ components:
       description: |
         Access token from `POST /auth/register`, `POST /auth/login`, or `POST /auth/refresh`.
         Paste only the token value; Swagger UI adds the `Bearer` prefix.
+    adminAuth:
+      type: http
+      scheme: bearer
+      description: ADMIN_API_KEY value (not a user JWT)
     refreshTokenCookie:
       type: apiKey
       in: cookie
@@ -990,6 +1032,11 @@ components:
           type: string
           format: uri
           nullable: true
+
+    UpdateOrganizationPlanRequest:
+      type: object
+      required: [plan]
+      properties:
         plan:
           $ref: "#/components/schemas/PlanType"
 
