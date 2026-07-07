@@ -203,25 +203,8 @@ func (s *Service) Book(ctx context.Context, orgSlug, typeSlug string, in BookInp
 		return BookingResult{}, ErrSlotUnavailable
 	}
 
-	payload, err := bookingPayload(meta.Organization, meta.InterviewType, booking, slot, "")
-	if err != nil {
-		return BookingResult{}, err
-	}
-
 	if !isGoogleMeet {
-		if _, err := qtx.InsertNotificationOutbox(ctx, db.InsertNotificationOutboxParams{
-			OrganizationID: meta.Organization.ID,
-			EventType:      db.NotificationEventTypeBookingCreated,
-			Payload:        payload,
-		}); err != nil {
-			return BookingResult{}, err
-		}
-
-		if _, err := qtx.InsertNotificationOutbox(ctx, db.InsertNotificationOutboxParams{
-			OrganizationID: meta.Organization.ID,
-			EventType:      db.NotificationEventTypeBookingCreated,
-			Payload:        payload,
-		}); err != nil {
+		if err := insertBookingCreatedOutbox(ctx, qtx, meta.Organization.ID, meta.Organization, meta.InterviewType, booking, slot, ""); err != nil {
 			return BookingResult{}, err
 		}
 	}
@@ -290,19 +273,8 @@ func (s *Service) finalizeGoogleMeetBooking(ctx context.Context, meta Metadata, 
 		return db.Booking{}, ErrGoogleCalendarFailed
 	}
 
-	payload, err := bookingPayload(meta.Organization, meta.InterviewType, updated, slot, event.MeetLink)
-	if err != nil {
+	if err := insertBookingCreatedOutbox(ctx, s.q, meta.Organization.ID, meta.Organization, meta.InterviewType, updated, slot, event.MeetLink); err != nil {
 		return updated, err
-	}
-
-	for range 2 {
-		if _, err := s.q.InsertNotificationOutbox(ctx, db.InsertNotificationOutboxParams{
-			OrganizationID: meta.Organization.ID,
-			EventType:      db.NotificationEventTypeBookingCreated,
-			Payload:        payload,
-		}); err != nil {
-			return updated, err
-		}
 	}
 
 	return updated, nil
@@ -479,7 +451,37 @@ func MeetingLocationFromType(it db.InterviewType) *string {
 	return &loc
 }
 
-func bookingPayload(org db.Organization, it db.InterviewType, booking db.Booking, slot db.Slot, meetLink string) ([]byte, error) {
+func insertBookingCreatedOutbox(
+	ctx context.Context,
+	q notificationInserter,
+	orgID pgtype.UUID,
+	org db.Organization,
+	it db.InterviewType,
+	booking db.Booking,
+	slot db.Slot,
+	meetLink string,
+) error {
+	for _, recipient := range []string{"recruiter", "candidate"} {
+		payload, err := bookingPayload(org, it, booking, slot, meetLink, recipient)
+		if err != nil {
+			return err
+		}
+		if _, err := q.InsertNotificationOutbox(ctx, db.InsertNotificationOutboxParams{
+			OrganizationID: orgID,
+			EventType:      db.NotificationEventTypeBookingCreated,
+			Payload:        payload,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type notificationInserter interface {
+	InsertNotificationOutbox(ctx context.Context, arg db.InsertNotificationOutboxParams) (db.NotificationOutbox, error)
+}
+
+func bookingPayload(org db.Organization, it db.InterviewType, booking db.Booking, slot db.Slot, meetLink, recipient string) ([]byte, error) {
 	data := map[string]any{
 		"booking_id":           booking.ID.String(),
 		"organization_name":    org.Name,
@@ -493,6 +495,7 @@ func bookingPayload(org db.Organization, it db.InterviewType, booking db.Booking
 		"slot_end_at":          slot.EndAt.Time.UTC().Format(time.RFC3339),
 		"reschedule_token":     booking.RescheduleToken,
 		"cancel_token":         booking.CancelToken,
+		"recipient":            recipient,
 	}
 	if meetLink != "" {
 		data["meet_link"] = meetLink

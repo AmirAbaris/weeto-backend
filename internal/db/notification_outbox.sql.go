@@ -42,3 +42,63 @@ func (q *Queries) InsertNotificationOutbox(ctx context.Context, arg InsertNotifi
 	)
 	return i, err
 }
+
+const listPendingNotificationOutbox = `-- name: ListPendingNotificationOutbox :many
+SELECT id, organization_id, event_type, payload, status, retry_count, created_at, processed_at
+FROM notification_outbox
+WHERE status = 'pending'
+ORDER BY created_at
+LIMIT $1
+FOR UPDATE SKIP LOCKED
+`
+
+func (q *Queries) ListPendingNotificationOutbox(ctx context.Context, limit int32) ([]NotificationOutbox, error) {
+	rows, err := q.db.Query(ctx, listPendingNotificationOutbox, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []NotificationOutbox{}
+	for rows.Next() {
+		var i NotificationOutbox
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrganizationID,
+			&i.EventType,
+			&i.Payload,
+			&i.Status,
+			&i.RetryCount,
+			&i.CreatedAt,
+			&i.ProcessedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const markNotificationOutboxFailed = `-- name: MarkNotificationOutboxFailed :exec
+UPDATE notification_outbox
+SET status = 'failed', retry_count = retry_count + 1, processed_at = NOW()
+WHERE id = $1
+`
+
+func (q *Queries) MarkNotificationOutboxFailed(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, markNotificationOutboxFailed, id)
+	return err
+}
+
+const markNotificationOutboxSent = `-- name: MarkNotificationOutboxSent :exec
+UPDATE notification_outbox
+SET status = 'sent', processed_at = NOW()
+WHERE id = $1
+`
+
+func (q *Queries) MarkNotificationOutboxSent(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, markNotificationOutboxSent, id)
+	return err
+}

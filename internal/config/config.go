@@ -25,6 +25,10 @@ type Config struct {
 
 	TokenEncryptionKey  []byte // 32 bytes for AES-256
 	SessionCookieSecure bool
+
+	SMSAPIKey     string
+	SMSTemplateID int
+	SMSBaseURL    string
 }
 
 func LoadConfig() (*Config, error) {
@@ -55,6 +59,9 @@ func LoadConfig() (*Config, error) {
 		GoogleRedirectURL:   os.Getenv("GOOGLE_REDIRECT_URL"),
 		TokenEncryptionKey:  encKey,
 		SessionCookieSecure: parseBool(os.Getenv("SESSION_COOKIE_SECURE")),
+		SMSAPIKey:           os.Getenv("SMS_API_KEY"),
+		SMSTemplateID:       parseInt(getEnv("SMS_TEMPLATE_ID", "123456")),
+		SMSBaseURL:          getEnv("SMS_BASE_URL", "https://api.sms.ir"),
 	}
 	if cfg.DBURL == "" {
 		return nil, errors.New("DB_URL is required")
@@ -102,5 +109,10 @@ func loadEncryptionKey(b64 string) ([]byte, error) {
 
 func parseBool(s string) bool {
 	v, _ := strconv.ParseBool(s)
+	return v
+}
+
+func parseInt(s string) int {
+	v, _ := strconv.Atoi(s)
 	return v
 }

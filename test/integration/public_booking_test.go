@@ -93,6 +93,19 @@ func TestBookSuccess(t *testing.T) {
 			t.Fatalf("status = %q", row.Status)
 		}
 	}
+
+	recipients := map[string]int{}
+	for _, row := range outbox {
+		var payload map[string]any
+		if err := json.Unmarshal(row.Payload, &payload); err != nil {
+			t.Fatalf("unmarshal payload: %v", err)
+		}
+		recipient, _ := payload["recipient"].(string)
+		recipients[recipient]++
+	}
+	if recipients["recruiter"] != 1 || recipients["candidate"] != 1 {
+		t.Fatalf("recipients = %#v", recipients)
+	}
 }
 
 func TestOnSiteBooking(t *testing.T) {
@@ -131,6 +144,9 @@ func TestOnSiteBooking(t *testing.T) {
 	}
 	if payload["meet_link"] != nil {
 		t.Fatalf("payload meet_link = %v, want nil", payload["meet_link"])
+	}
+	if payload["recipient"] != "recruiter" && payload["recipient"] != "candidate" {
+		t.Fatalf("recipient = %v", payload["recipient"])
 	}
 	loc, ok := payload["meeting_location"].(string)
 	if !ok || loc != "تهران، خیابان ولیعصر، پلاک ۱۲" {

@@ -310,7 +310,7 @@ func (s *Service) cancelScheduledBookingTx(ctx context.Context, qtx *db.Queries,
 		return cancelTxResult{}, err
 	}
 
-	payload, err := bookingPayload(org, it, cancelled, slot, "")
+	payload, err := bookingPayload(org, it, cancelled, slot, "", "candidate")
 	if err != nil {
 		return cancelTxResult{}, err
 	}
@@ -425,7 +425,7 @@ func cancelRowToBooking(row db.GetScheduledBookingByCancelTokenForUpdateRow) db.
 }
 
 func reschedulePayload(org db.Organization, it db.InterviewType, booking db.Booking, slot, prevSlot db.Slot) ([]byte, error) {
-	payload, err := bookingPayload(org, it, booking, slot, "")
+	payload, err := bookingPayload(org, it, booking, slot, "", "candidate")
 	if err != nil {
 		return nil, err
 	}
