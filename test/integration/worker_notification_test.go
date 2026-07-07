@@ -12,7 +12,7 @@ import (
 	"github.com/AmirAbaris/weeto-backend/test/fixtures"
 )
 
-func TestWorkerProcessesBookingCreatedCandidateEmail(t *testing.T) {
+func TestWorkerProcessesBookingCreatedEmails(t *testing.T) {
 	now := mondayMorningTehran(t)
 	env := NewTestEnv(t, now)
 
@@ -35,8 +35,8 @@ func TestWorkerProcessesBookingCreatedCandidateEmail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("process batch: %v", err)
 	}
-	if processed != 1 {
-		t.Fatalf("processed = %d, want 1", processed)
+	if processed != 2 {
+		t.Fatalf("processed = %d, want 2", processed)
 	}
 
 	outbox, err := env.Queries.ListNotificationOutboxByOrg(env.Ctx, env.OrgID)
@@ -44,27 +44,27 @@ func TestWorkerProcessesBookingCreatedCandidateEmail(t *testing.T) {
 		t.Fatalf("list outbox: %v", err)
 	}
 
-	var candidateSent, recruiterPending int
+	var candidateSent, recruiterSent int
 	for _, row := range outbox {
+		if row.EventType != db.NotificationEventTypeBookingCreated {
+			continue
+		}
 		var payload map[string]any
 		if err := json.Unmarshal(row.Payload, &payload); err != nil {
 			t.Fatalf("unmarshal payload: %v", err)
 		}
 		recipient, _ := payload["recipient"].(string)
+		if row.Status != db.NotificationStatusSent {
+			t.Fatalf("%s row status = %q, want sent", recipient, row.Status)
+		}
 		switch recipient {
 		case "candidate":
-			if row.Status != db.NotificationStatusSent {
-				t.Fatalf("candidate row status = %q, want sent", row.Status)
-			}
 			candidateSent++
 		case "recruiter":
-			if row.Status != db.NotificationStatusPending {
-				t.Fatalf("recruiter row status = %q, want pending", row.Status)
-			}
-			recruiterPending++
+			recruiterSent++
 		}
 	}
-	if candidateSent != 1 || recruiterPending != 1 {
-		t.Fatalf("candidateSent=%d recruiterPending=%d, want 1/1", candidateSent, recruiterPending)
+	if candidateSent != 1 || recruiterSent != 1 {
+		t.Fatalf("candidateSent=%d recruiterSent=%d, want 1/1", candidateSent, recruiterSent)
 	}
 }

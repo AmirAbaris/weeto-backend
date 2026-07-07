@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/AmirAbaris/weeto-backend/internal/config"
 	"github.com/AmirAbaris/weeto-backend/internal/db"
@@ -101,6 +102,70 @@ func TestBookSuccess(t *testing.T) {
 			t.Fatalf("recipient = %q", recipient)
 		}
 	}
+}
+
+func TestBookingEnqueues24hReminderWhenSlotFarEnough(t *testing.T) {
+	now := mondayMorningTehran(t)
+	env := NewTestEnv(t, now)
+
+	it := env.CreateInterviewType(60, 0)
+	env.UpsertAvailability(fixtures.Monday9to17(50))
+
+	slot := slotAtLeast24hAhead(t, env, it)
+	_, err := env.BookingSvc.Book(env.Ctx, env.OrgSlug, it.Slug, bookingsvc.BookInput{
+		SlotID: slot.ID,
+		Name:   "Future Candidate",
+		Phone:  "+989121234567",
+		Email:  "future@example.com",
+	})
+	if err != nil {
+		t.Fatalf("book: %v", err)
+	}
+
+	outbox, err := env.Queries.ListNotificationOutboxByOrg(env.Ctx, env.OrgID)
+	if err != nil {
+		t.Fatalf("list outbox: %v", err)
+	}
+	if len(outbox) != 3 {
+		t.Fatalf("outbox rows = %d, want 3", len(outbox))
+	}
+
+	var reminderCount int
+	for _, row := range outbox {
+		if row.EventType != db.NotificationEventTypeReminder24h {
+			continue
+		}
+		reminderCount++
+		if row.Status != db.NotificationStatusPending {
+			t.Fatalf("reminder status = %q, want pending", row.Status)
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(row.Payload, &payload); err != nil {
+			t.Fatalf("unmarshal payload: %v", err)
+		}
+		if payload["recipient"] != "candidate" {
+			t.Fatalf("reminder recipient = %v, want candidate", payload["recipient"])
+		}
+		wantScheduled := slot.StartAt.Time.Add(-24 * time.Hour).UTC()
+		if !row.ScheduledAt.Time.UTC().Equal(wantScheduled) {
+			t.Fatalf("scheduled_at = %v, want %v", row.ScheduledAt.Time.UTC(), wantScheduled)
+		}
+	}
+	if reminderCount != 1 {
+		t.Fatalf("reminder rows = %d, want 1", reminderCount)
+	}
+}
+
+func slotAtLeast24hAhead(t *testing.T, env *TestEnv, it db.InterviewType) db.Slot {
+	t.Helper()
+	minStart := env.Now.Add(25 * time.Hour)
+	for _, slot := range env.ListSlots(it.ID) {
+		if slot.StartAt.Time.After(minStart) {
+			return slot
+		}
+	}
+	t.Fatal("no slot at least 24h ahead")
+	return db.Slot{}
 }
 
 func TestOnSiteBooking(t *testing.T) {

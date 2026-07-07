@@ -184,6 +184,18 @@ func (s *Service) Reschedule(ctx context.Context, token string, newSlotID pgtype
 		return BookingResult{}, "", "", nil, err
 	}
 
+	if err := cancelPendingReminders(ctx, qtx, updated.ID); err != nil {
+		return BookingResult{}, "", "", nil, err
+	}
+
+	meetLink := ""
+	if updated.MeetLink.Valid {
+		meetLink = updated.MeetLink.String
+	}
+	if err := insertReminderNotification(ctx, qtx, org, it, updated, newSlot, meetLink, time.Now().UTC()); err != nil {
+		return BookingResult{}, "", "", nil, err
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return BookingResult{}, "", "", nil, err
 	}

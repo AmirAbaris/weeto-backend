@@ -142,9 +142,10 @@ func (ns NullNotificationEventType) Value() (driver.Value, error) {
 type NotificationStatus string
 
 const (
-	NotificationStatusPending NotificationStatus = "pending"
-	NotificationStatusSent    NotificationStatus = "sent"
-	NotificationStatusFailed  NotificationStatus = "failed"
+	NotificationStatusPending   NotificationStatus = "pending"
+	NotificationStatusSent      NotificationStatus = "sent"
+	NotificationStatusFailed    NotificationStatus = "failed"
+	NotificationStatusCancelled NotificationStatus = "cancelled"
 )
 
 func (e *NotificationStatus) Scan(src interface{}) error {
@@ -295,6 +296,7 @@ type NotificationOutbox struct {
 	RetryCount     int32                 `json:"retry_count"`
 	CreatedAt      pgtype.Timestamptz    `json:"created_at"`
 	ProcessedAt    pgtype.Timestamptz    `json:"processed_at"`
+	ScheduledAt    pgtype.Timestamptz    `json:"scheduled_at"`
 }
 
 type Organization struct {

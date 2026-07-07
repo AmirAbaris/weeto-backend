@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/AmirAbaris/weeto-backend/internal/db"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type cancelledBy string
@@ -93,6 +94,10 @@ func insertCancelNotifications(
 	slot db.Slot,
 	by cancelledBy,
 ) error {
+	if err := cancelPendingReminders(ctx, qtx, booking.ID); err != nil {
+		return err
+	}
+
 	candidatePayload, recruiterPayload, err := cancelNotificationPayloads(ctx, qtx, org, it, booking, slot, by)
 	if err != nil {
 		return err
@@ -107,4 +112,46 @@ func insertCancelNotifications(
 		}
 	}
 	return nil
+}
+
+func reminderScheduledAt(slotStart, now time.Time) (time.Time, bool) {
+	at := slotStart.Add(-24 * time.Hour)
+	if !at.After(now) {
+		return time.Time{}, false
+	}
+	return at, true
+}
+
+func insertReminderNotification(
+	ctx context.Context,
+	qtx *db.Queries,
+	org db.Organization,
+	it db.InterviewType,
+	booking db.Booking,
+	slot db.Slot,
+	meetLink string,
+	now time.Time,
+) error {
+	scheduledAt, ok := reminderScheduledAt(slot.StartAt.Time, now)
+	if !ok {
+		return nil
+	}
+
+	payload, err := notificationPayload(ctx, qtx, org, it, booking, slot, meetLink, "candidate", nil)
+	if err != nil {
+		return err
+	}
+
+	_, err = qtx.InsertNotificationOutbox(ctx, db.InsertNotificationOutboxParams{
+		OrganizationID: org.ID,
+		EventType:      db.NotificationEventTypeReminder24h,
+		Payload:        payload,
+		ScheduledAt:    pgtype.Timestamptz{Time: scheduledAt.UTC(), Valid: true},
+	})
+	return err
+}
+
+func cancelPendingReminders(ctx context.Context, qtx *db.Queries, bookingID pgtype.UUID) error {
+	_, err := qtx.CancelPendingRemindersByBookingID(ctx, bookingID.String())
+	return err
 }

@@ -205,3 +205,60 @@ func BookingCancelledRecruiterMessage(data BookingNotificationData) Message {
 
 	return Message{To: data.RecruiterEmail, Subject: subject, HTML: body}
 }
+
+func BookingCreatedRecruiterMessage(data BookingNotificationData) Message {
+	timeRange := formatTimeRange(data.SlotStartAt, data.SlotEndAt)
+	subject := fmt.Sprintf("رزرو جدید: %s — %s", data.CandidateName, data.InterviewTypeTitle)
+
+	body := fmt.Sprintf(`<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<body style="font-family: Tahoma, Arial, sans-serif; line-height: 1.6; color: #111;">
+  <p>سلام،</p>
+  <p><strong>%s</strong> یک زمان برای <strong>%s</strong> در <strong>%s</strong> رزرو کرد.</p>
+  <p><strong>زمان:</strong> %s</p>
+  <p><strong>ایمیل:</strong> %s</p>
+  <p><strong>تلفن:</strong> %s</p>
+  %s
+</body>
+</html>`,
+		html.EscapeString(data.CandidateName),
+		html.EscapeString(data.InterviewTypeTitle),
+		html.EscapeString(data.OrganizationName),
+		html.EscapeString(timeRange),
+		html.EscapeString(data.CandidateEmail),
+		html.EscapeString(data.CandidatePhone),
+		meetingDetailsHTML(data.MeetLink, data.MeetingLocation),
+	)
+
+	return Message{To: data.RecruiterEmail, Subject: subject, HTML: body}
+}
+
+func BookingReminder24hMessage(data BookingNotificationData) Message {
+	timeRange := formatTimeRange(data.SlotStartAt, data.SlotEndAt)
+	subject := fmt.Sprintf("یادآوری مصاحبه فردا: %s — %s", data.InterviewTypeTitle, data.OrganizationName)
+
+	body := fmt.Sprintf(`<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<body style="font-family: Tahoma, Arial, sans-serif; line-height: 1.6; color: #111;">
+  <p>سلام %s،</p>
+  <p>یادآوری: مصاحبه <strong>%s</strong> در <strong>%s</strong> فردا برگزار می‌شود.</p>
+  <p><strong>زمان:</strong> %s</p>
+  %s
+  <p>
+    <a href="%s" style="display:inline-block;padding:10px 16px;background:#111;color:#fff;text-decoration:none;border-radius:6px;">تغییر زمان</a>
+    &nbsp;
+    <a href="%s" style="display:inline-block;padding:10px 16px;background:#b42318;color:#fff;text-decoration:none;border-radius:6px;">لغو رزرو</a>
+  </p>
+</body>
+</html>`,
+		html.EscapeString(data.CandidateName),
+		html.EscapeString(data.InterviewTypeTitle),
+		html.EscapeString(data.OrganizationName),
+		html.EscapeString(timeRange),
+		meetingDetailsHTML(data.MeetLink, data.MeetingLocation),
+		html.EscapeString(data.RescheduleURL),
+		html.EscapeString(data.CancelURL),
+	)
+
+	return Message{To: data.CandidateEmail, Subject: subject, HTML: body}
+}

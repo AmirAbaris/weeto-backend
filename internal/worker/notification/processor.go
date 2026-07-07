@@ -92,22 +92,49 @@ func (p *Processor) processRow(ctx context.Context, qtx *db.Queries, row db.Noti
 
 	switch row.EventType {
 	case db.NotificationEventTypeBookingCreated:
-		return p.sendBookingConfirmation(ctx, row.Payload, meta.Recipient)
+		return p.sendBookingCreated(ctx, row.Payload, meta.Recipient)
 	case db.NotificationEventTypeBookingRescheduled:
 		return p.sendBookingRescheduled(ctx, row.Payload, meta.Recipient)
 	case db.NotificationEventTypeBookingCancelled:
 		return p.sendBookingCancelled(ctx, row.Payload, meta.Recipient)
+	case db.NotificationEventTypeReminder24h:
+		return p.sendReminder24h(ctx, row.Payload, meta.Recipient)
 	default:
 		return fmt.Errorf("unsupported event type: %s", row.EventType)
 	}
 }
 
-func (p *Processor) sendBookingConfirmation(ctx context.Context, payload []byte, recipient string) error {
+func (p *Processor) sendBookingCreated(ctx context.Context, payload []byte, recipient string) error {
+	switch recipient {
+	case "candidate":
+		data, err := email.ParseBookingConfirmationPayload(payload, p.frontendURL)
+		if err != nil {
+			return err
+		}
+		if data.CandidateEmail == "" {
+			return fmt.Errorf("candidate_email is required")
+		}
+		return p.sender.Send(ctx, email.BookingConfirmationMessage(data))
+	case "recruiter":
+		data, err := email.ParseBookingNotificationPayload(payload, p.frontendURL)
+		if err != nil {
+			return err
+		}
+		if data.RecruiterEmail == "" {
+			return fmt.Errorf("recruiter_email is required")
+		}
+		return p.sender.Send(ctx, email.BookingCreatedRecruiterMessage(data))
+	default:
+		return fmt.Errorf("unexpected recipient: %s", recipient)
+	}
+}
+
+func (p *Processor) sendReminder24h(ctx context.Context, payload []byte, recipient string) error {
 	if recipient != "candidate" {
 		return fmt.Errorf("unexpected recipient: %s", recipient)
 	}
 
-	data, err := email.ParseBookingConfirmationPayload(payload, p.frontendURL)
+	data, err := email.ParseBookingNotificationPayload(payload, p.frontendURL)
 	if err != nil {
 		return err
 	}
@@ -115,7 +142,7 @@ func (p *Processor) sendBookingConfirmation(ctx context.Context, payload []byte,
 		return fmt.Errorf("candidate_email is required")
 	}
 
-	return p.sender.Send(ctx, email.BookingConfirmationMessage(data))
+	return p.sender.Send(ctx, email.BookingReminder24hMessage(data))
 }
 
 func (p *Processor) sendBookingRescheduled(ctx context.Context, payload []byte, recipient string) error {

@@ -431,7 +431,7 @@ func (q *Queries) InsertBooking(ctx context.Context, arg InsertBookingParams) (B
 }
 
 const listNotificationOutboxByOrg = `-- name: ListNotificationOutboxByOrg :many
-SELECT id, organization_id, event_type, payload, status, retry_count, created_at, processed_at
+SELECT id, organization_id, event_type, payload, status, retry_count, created_at, processed_at, scheduled_at
 FROM notification_outbox
 WHERE organization_id = $1
 ORDER BY created_at
@@ -455,6 +455,7 @@ func (q *Queries) ListNotificationOutboxByOrg(ctx context.Context, organizationI
 			&i.RetryCount,
 			&i.CreatedAt,
 			&i.ProcessedAt,
+			&i.ScheduledAt,
 		); err != nil {
 			return nil, err
 		}

@@ -11,16 +11,35 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const cancelPendingRemindersByBookingID = `-- name: CancelPendingRemindersByBookingID :execrows
+UPDATE notification_outbox
+SET status = 'cancelled',
+    processed_at = NOW()
+WHERE status = 'pending'
+  AND event_type = 'reminder_24h'
+  AND payload->>'booking_id' = $1::text
+`
+
+func (q *Queries) CancelPendingRemindersByBookingID(ctx context.Context, bookingID string) (int64, error) {
+	result, err := q.db.Exec(ctx, cancelPendingRemindersByBookingID, bookingID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const claimPendingNotifications = `-- name: ClaimPendingNotifications :many
-SELECT id, organization_id, event_type, payload, status, retry_count, created_at, processed_at
+SELECT id, organization_id, event_type, payload, status, retry_count, created_at, processed_at, scheduled_at
 FROM notification_outbox
 WHERE status = 'pending'
+  AND scheduled_at <= NOW()
   AND (
-    (event_type = 'booking_created' AND payload->>'recipient' = 'candidate')
+    (event_type = 'booking_created' AND payload->>'recipient' IN ('candidate', 'recruiter'))
     OR (event_type = 'booking_rescheduled' AND payload->>'recipient' = 'candidate')
     OR (event_type = 'booking_cancelled' AND payload->>'recipient' IN ('candidate', 'recruiter'))
+    OR (event_type = 'reminder_24h' AND payload->>'recipient' = 'candidate')
   )
-ORDER BY created_at
+ORDER BY scheduled_at, created_at
 LIMIT $1
 FOR UPDATE SKIP LOCKED
 `
@@ -43,6 +62,7 @@ func (q *Queries) ClaimPendingNotifications(ctx context.Context, limit int32) ([
 			&i.RetryCount,
 			&i.CreatedAt,
 			&i.ProcessedAt,
+			&i.ScheduledAt,
 		); err != nil {
 			return nil, err
 		}
@@ -58,20 +78,27 @@ const insertNotificationOutbox = `-- name: InsertNotificationOutbox :one
 INSERT INTO notification_outbox (
     organization_id,
     event_type,
-    payload
+    payload,
+    scheduled_at
 )
-VALUES ($1, $2, $3)
-RETURNING id, organization_id, event_type, payload, status, retry_count, created_at, processed_at
+VALUES ($1, $2, $3, COALESCE($4, NOW()))
+RETURNING id, organization_id, event_type, payload, status, retry_count, created_at, processed_at, scheduled_at
 `
 
 type InsertNotificationOutboxParams struct {
 	OrganizationID pgtype.UUID           `json:"organization_id"`
 	EventType      NotificationEventType `json:"event_type"`
 	Payload        []byte                `json:"payload"`
+	ScheduledAt    interface{}           `json:"scheduled_at"`
 }
 
 func (q *Queries) InsertNotificationOutbox(ctx context.Context, arg InsertNotificationOutboxParams) (NotificationOutbox, error) {
-	row := q.db.QueryRow(ctx, insertNotificationOutbox, arg.OrganizationID, arg.EventType, arg.Payload)
+	row := q.db.QueryRow(ctx, insertNotificationOutbox,
+		arg.OrganizationID,
+		arg.EventType,
+		arg.Payload,
+		arg.ScheduledAt,
+	)
 	var i NotificationOutbox
 	err := row.Scan(
 		&i.ID,
@@ -82,6 +109,7 @@ func (q *Queries) InsertNotificationOutbox(ctx context.Context, arg InsertNotifi
 		&i.RetryCount,
 		&i.CreatedAt,
 		&i.ProcessedAt,
+		&i.ScheduledAt,
 	)
 	return i, err
 }
@@ -98,7 +126,7 @@ SET retry_count = retry_count + 1,
         ELSE processed_at
     END
 WHERE id = $1
-RETURNING id, organization_id, event_type, payload, status, retry_count, created_at, processed_at
+RETURNING id, organization_id, event_type, payload, status, retry_count, created_at, processed_at, scheduled_at
 `
 
 type MarkNotificationFailedParams struct {
@@ -118,6 +146,7 @@ func (q *Queries) MarkNotificationFailed(ctx context.Context, arg MarkNotificati
 		&i.RetryCount,
 		&i.CreatedAt,
 		&i.ProcessedAt,
+		&i.ScheduledAt,
 	)
 	return i, err
 }
@@ -127,7 +156,7 @@ UPDATE notification_outbox
 SET status = 'sent',
     processed_at = NOW()
 WHERE id = $1
-RETURNING id, organization_id, event_type, payload, status, retry_count, created_at, processed_at
+RETURNING id, organization_id, event_type, payload, status, retry_count, created_at, processed_at, scheduled_at
 `
 
 func (q *Queries) MarkNotificationSent(ctx context.Context, id pgtype.UUID) (NotificationOutbox, error) {
@@ -142,6 +171,7 @@ func (q *Queries) MarkNotificationSent(ctx context.Context, id pgtype.UUID) (Not
 		&i.RetryCount,
 		&i.CreatedAt,
 		&i.ProcessedAt,
+		&i.ScheduledAt,
 	)
 	return i, err
 }

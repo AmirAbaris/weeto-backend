@@ -20,12 +20,15 @@ func TestRescheduleSuccess(t *testing.T) {
 	it := env.CreateInterviewType(60, 0)
 	env.UpsertAvailability(fixtures.Monday9to17(50))
 
-	slotA := env.FirstAvailableSlot(it)
 	slots := env.ListSlots(it.ID)
 	if len(slots) < 2 {
 		t.Fatal("need at least 2 slots")
 	}
-	slotB := slots[1]
+	slotA := slotAtLeast24hAhead(t, env, it)
+	slotB := slots[len(slots)-1]
+	if slotB.ID == slotA.ID {
+		t.Fatal("need a different target slot for reschedule")
+	}
 
 	result, err := env.BookingSvc.Book(env.Ctx, env.OrgSlug, it.Slug, bookingsvc.BookInput{
 		SlotID: slotA.ID,
@@ -106,6 +109,16 @@ func TestRescheduleSuccess(t *testing.T) {
 		if payload["recipient"] != "candidate" {
 			t.Fatalf("recipient = %v, want candidate", payload["recipient"])
 		}
+	}
+
+	var pendingReminders int
+	for _, row := range outbox {
+		if row.EventType == db.NotificationEventTypeReminder24h && row.Status == db.NotificationStatusPending {
+			pendingReminders++
+		}
+	}
+	if pendingReminders != 1 {
+		t.Fatalf("pending reminder rows = %d, want 1", pendingReminders)
 	}
 }
 
@@ -228,7 +241,7 @@ func TestCancelByTokenSuccess(t *testing.T) {
 	env := NewTestEnv(t, mondayMorningTehran(t))
 	it := env.CreateInterviewType(60, 0)
 	env.UpsertAvailability(fixtures.Monday9to17(50))
-	slot := env.FirstAvailableSlot(it)
+	slot := slotAtLeast24hAhead(t, env, it)
 
 	result, err := env.BookingSvc.Book(env.Ctx, env.OrgSlug, it.Slug, bookingsvc.BookInput{
 		SlotID: slot.ID,
@@ -284,6 +297,13 @@ func TestCancelByTokenSuccess(t *testing.T) {
 	if cancelledCount != 2 {
 		t.Fatalf("booking_cancelled outbox rows = %d, want 2", cancelledCount)
 	}
+
+	for _, row := range outbox {
+		if row.EventType == db.NotificationEventTypeReminder24h && row.Status == db.NotificationStatusCancelled {
+			return
+		}
+	}
+	t.Fatal("expected cancelled reminder_24h row")
 }
 
 func TestRebookAfterCancelByToken(t *testing.T) {

@@ -228,6 +228,10 @@ func (s *Service) Book(ctx context.Context, orgSlug, typeSlug string, in BookInp
 		}); err != nil {
 			return BookingResult{}, err
 		}
+
+		if err := insertReminderNotification(ctx, qtx, meta.Organization, meta.InterviewType, booking, slot, "", time.Now().UTC()); err != nil {
+			return BookingResult{}, err
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -311,6 +315,10 @@ func (s *Service) finalizeGoogleMeetBooking(ctx context.Context, meta Metadata, 
 		}); err != nil {
 			return updated, err
 		}
+	}
+
+	if err := insertReminderNotification(ctx, s.q, meta.Organization, meta.InterviewType, updated, slot, event.MeetLink, time.Now().UTC()); err != nil {
+		return updated, err
 	}
 
 	return updated, nil
