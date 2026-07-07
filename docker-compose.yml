@@ -46,5 +46,19 @@ services:
       retries: 3
       start_period: 10s
 
+  worker:
+    build:
+      context: .
+      target: worker
+    env_file:
+      - .env
+    environment:
+      DB_URL: postgres://weeto:weeto@postgres:5432/weeto?sslmode=disable
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      api:
+        condition: service_healthy
+
 volumes:
   postgres_data:

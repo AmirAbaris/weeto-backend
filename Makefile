@@ -1,4 +1,4 @@
-.PHONY: help dev migrate-up migrate-down migrate-create migrate-status sqlc test integration-test docker-up docker-down docker-logs docker-prod-up docker-migrate
+.PHONY: help dev worker migrate-up migrate-down migrate-create migrate-status sqlc test integration-test docker-up docker-down docker-logs docker-prod-up docker-migrate
 
 -include .env
 export
@@ -8,6 +8,7 @@ DB_URL ?= postgres://amirabaris@localhost:5432/weeto?sslmode=disable
 help:
 	@echo "Targets:"
 	@echo "  dev               Run API with hot reload (air)"
+	@echo "  worker            Run notification outbox worker"
 	@echo "  migrate-up        Apply pending migrations"
 	@echo "  migrate-down      Roll back last migration"
 	@echo "  migrate-create    Create a new migration file (NAME=...)"
@@ -23,6 +24,9 @@ help:
 
 dev:
 	go run github.com/air-verse/air@latest
+
+worker:
+	go run ./cmd/worker
 
 migrate-up:
 	goose -dir db/migrations postgres "$(DB_URL)" up

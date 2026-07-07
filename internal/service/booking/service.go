@@ -203,7 +203,11 @@ func (s *Service) Book(ctx context.Context, orgSlug, typeSlug string, in BookInp
 		return BookingResult{}, ErrSlotUnavailable
 	}
 
-	payload, err := bookingPayload(meta.Organization, meta.InterviewType, booking, slot, "")
+	payloadCandidate, err := bookingPayloadWithRecipient(meta.Organization, meta.InterviewType, booking, slot, "", "candidate")
+	if err != nil {
+		return BookingResult{}, err
+	}
+	payloadRecruiter, err := bookingPayloadWithRecipient(meta.Organization, meta.InterviewType, booking, slot, "", "recruiter")
 	if err != nil {
 		return BookingResult{}, err
 	}
@@ -212,7 +216,7 @@ func (s *Service) Book(ctx context.Context, orgSlug, typeSlug string, in BookInp
 		if _, err := qtx.InsertNotificationOutbox(ctx, db.InsertNotificationOutboxParams{
 			OrganizationID: meta.Organization.ID,
 			EventType:      db.NotificationEventTypeBookingCreated,
-			Payload:        payload,
+			Payload:        payloadCandidate,
 		}); err != nil {
 			return BookingResult{}, err
 		}
@@ -220,7 +224,7 @@ func (s *Service) Book(ctx context.Context, orgSlug, typeSlug string, in BookInp
 		if _, err := qtx.InsertNotificationOutbox(ctx, db.InsertNotificationOutboxParams{
 			OrganizationID: meta.Organization.ID,
 			EventType:      db.NotificationEventTypeBookingCreated,
-			Payload:        payload,
+			Payload:        payloadRecruiter,
 		}); err != nil {
 			return BookingResult{}, err
 		}
@@ -290,12 +294,16 @@ func (s *Service) finalizeGoogleMeetBooking(ctx context.Context, meta Metadata, 
 		return db.Booking{}, ErrGoogleCalendarFailed
 	}
 
-	payload, err := bookingPayload(meta.Organization, meta.InterviewType, updated, slot, event.MeetLink)
+	payloadCandidate, err := bookingPayloadWithRecipient(meta.Organization, meta.InterviewType, updated, slot, event.MeetLink, "candidate")
+	if err != nil {
+		return updated, err
+	}
+	payloadRecruiter, err := bookingPayloadWithRecipient(meta.Organization, meta.InterviewType, updated, slot, event.MeetLink, "recruiter")
 	if err != nil {
 		return updated, err
 	}
 
-	for range 2 {
+	for _, payload := range [][]byte{payloadCandidate, payloadRecruiter} {
 		if _, err := s.q.InsertNotificationOutbox(ctx, db.InsertNotificationOutboxParams{
 			OrganizationID: meta.Organization.ID,
 			EventType:      db.NotificationEventTypeBookingCreated,
@@ -502,6 +510,19 @@ func bookingPayload(org db.Organization, it db.InterviewType, booking db.Booking
 	if it.MeetingProvider == db.MeetingProviderOnSite && it.MeetingUrl.Valid {
 		data["meeting_location"] = it.MeetingUrl.String
 	}
+	return json.Marshal(data)
+}
+
+func bookingPayloadWithRecipient(org db.Organization, it db.InterviewType, booking db.Booking, slot db.Slot, meetLink, recipient string) ([]byte, error) {
+	payload, err := bookingPayload(org, it, booking, slot, meetLink)
+	if err != nil {
+		return nil, err
+	}
+	var data map[string]any
+	if err := json.Unmarshal(payload, &data); err != nil {
+		return nil, err
+	}
+	data["recipient"] = recipient
 	return json.Marshal(data)
 }
 

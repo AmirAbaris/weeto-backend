@@ -92,6 +92,14 @@ func TestBookSuccess(t *testing.T) {
 		if row.Status != db.NotificationStatusPending {
 			t.Fatalf("status = %q", row.Status)
 		}
+		var payload map[string]any
+		if err := json.Unmarshal(row.Payload, &payload); err != nil {
+			t.Fatalf("unmarshal payload: %v", err)
+		}
+		recipient, _ := payload["recipient"].(string)
+		if recipient != "candidate" && recipient != "recruiter" {
+			t.Fatalf("recipient = %q", recipient)
+		}
 	}
 }
 

@@ -11,6 +11,46 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const claimPendingNotifications = `-- name: ClaimPendingNotifications :many
+SELECT id, organization_id, event_type, payload, status, retry_count, created_at, processed_at
+FROM notification_outbox
+WHERE status = 'pending'
+  AND event_type = 'booking_created'
+  AND payload->>'recipient' = 'candidate'
+ORDER BY created_at
+LIMIT $1
+FOR UPDATE SKIP LOCKED
+`
+
+func (q *Queries) ClaimPendingNotifications(ctx context.Context, limit int32) ([]NotificationOutbox, error) {
+	rows, err := q.db.Query(ctx, claimPendingNotifications, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []NotificationOutbox{}
+	for rows.Next() {
+		var i NotificationOutbox
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrganizationID,
+			&i.EventType,
+			&i.Payload,
+			&i.Status,
+			&i.RetryCount,
+			&i.CreatedAt,
+			&i.ProcessedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const insertNotificationOutbox = `-- name: InsertNotificationOutbox :one
 INSERT INTO notification_outbox (
     organization_id,
@@ -29,6 +69,66 @@ type InsertNotificationOutboxParams struct {
 
 func (q *Queries) InsertNotificationOutbox(ctx context.Context, arg InsertNotificationOutboxParams) (NotificationOutbox, error) {
 	row := q.db.QueryRow(ctx, insertNotificationOutbox, arg.OrganizationID, arg.EventType, arg.Payload)
+	var i NotificationOutbox
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.EventType,
+		&i.Payload,
+		&i.Status,
+		&i.RetryCount,
+		&i.CreatedAt,
+		&i.ProcessedAt,
+	)
+	return i, err
+}
+
+const markNotificationFailed = `-- name: MarkNotificationFailed :one
+UPDATE notification_outbox
+SET retry_count = retry_count + 1,
+    status = CASE
+        WHEN retry_count + 1 >= $2 THEN 'failed'::notification_status
+        ELSE 'pending'::notification_status
+    END,
+    processed_at = CASE
+        WHEN retry_count + 1 >= $2 THEN NOW()
+        ELSE processed_at
+    END
+WHERE id = $1
+RETURNING id, organization_id, event_type, payload, status, retry_count, created_at, processed_at
+`
+
+type MarkNotificationFailedParams struct {
+	ID         pgtype.UUID `json:"id"`
+	RetryCount int32       `json:"retry_count"`
+}
+
+func (q *Queries) MarkNotificationFailed(ctx context.Context, arg MarkNotificationFailedParams) (NotificationOutbox, error) {
+	row := q.db.QueryRow(ctx, markNotificationFailed, arg.ID, arg.RetryCount)
+	var i NotificationOutbox
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.EventType,
+		&i.Payload,
+		&i.Status,
+		&i.RetryCount,
+		&i.CreatedAt,
+		&i.ProcessedAt,
+	)
+	return i, err
+}
+
+const markNotificationSent = `-- name: MarkNotificationSent :one
+UPDATE notification_outbox
+SET status = 'sent',
+    processed_at = NOW()
+WHERE id = $1
+RETURNING id, organization_id, event_type, payload, status, retry_count, created_at, processed_at
+`
+
+func (q *Queries) MarkNotificationSent(ctx context.Context, id pgtype.UUID) (NotificationOutbox, error) {
+	row := q.db.QueryRow(ctx, markNotificationSent, id)
 	var i NotificationOutbox
 	err := row.Scan(
 		&i.ID,
