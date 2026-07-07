@@ -1,4 +1,4 @@
-.PHONY: help dev migrate-up migrate-down migrate-create migrate-status sqlc test integration-test
+.PHONY: help dev migrate-up migrate-down migrate-create migrate-status sqlc test integration-test docker-up docker-down docker-logs docker-prod-up docker-migrate
 
 -include .env
 export
@@ -15,6 +15,11 @@ help:
 	@echo "  sqlc              Regenerate internal/db from db/queries"
 	@echo "  test              Run unit tests"
 	@echo "  integration-test  Run integration tests (requires test DB)"
+	@echo "  docker-up         Build and start full stack (postgres + migrate + api)"
+	@echo "  docker-down       Stop docker compose stack"
+	@echo "  docker-logs       Follow API container logs"
+	@echo "  docker-prod-up    Build and start production stack"
+	@echo "  docker-migrate    Run migrations in docker"
 
 dev:
 	go run github.com/air-verse/air@latest
@@ -40,3 +45,18 @@ test:
 
 integration-test:
 	go test ./test/integration/...
+
+docker-up:
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+
+docker-down:
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml down
+
+docker-logs:
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f api
+
+docker-prod-up:
+	docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+
+docker-migrate:
+	docker compose -f docker-compose.yml run --rm migrate
