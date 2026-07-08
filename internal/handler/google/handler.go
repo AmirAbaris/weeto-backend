@@ -66,6 +66,7 @@ func (h *Handler) Disconnect(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// checks if google is connected and db is in sync with google data
 func (h *Handler) Status(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {

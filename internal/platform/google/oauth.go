@@ -45,10 +45,12 @@ func NewOAuth(cfg *config.Config) *OAuth {
 	}
 }
 
+// generate google login URL
 func (o *OAuth) AuthCodeURL(state string) string {
 	return o.oauth2.AuthCodeURL(state, oauth2.AccessTypeOffline, oauth2.ApprovalForce)
 }
 
+// take the temp auth code from google and exchange it for permanent refresh token
 func (o *OAuth) Exchange(ctx context.Context, code string) (TokenExchangeResult, error) {
 	token, err := o.oauth2.Exchange(ctx, code)
 	if err != nil {
@@ -70,6 +72,7 @@ func (o *OAuth) Exchange(ctx context.Context, code string) (TokenExchangeResult,
 	}, nil
 }
 
+// using access token to know the user from google
 func fetchUserInfo(ctx context.Context, accessToken string) (googleUserInfo, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://www.googleapis.com/oauth2/v2/userinfo", nil)
 	if err != nil {
@@ -77,6 +80,7 @@ func fetchUserInfo(ctx context.Context, accessToken string) (googleUserInfo, err
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 
+	// do sends an http req
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return googleUserInfo{}, fmt.Errorf("fetch userinfo: %w", err)

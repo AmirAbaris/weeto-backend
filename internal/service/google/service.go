@@ -7,8 +7,8 @@ import (
 
 	"github.com/AmirAbaris/weeto-backend/internal/config"
 	"github.com/AmirAbaris/weeto-backend/internal/db"
-	googleplatform "github.com/AmirAbaris/weeto-backend/internal/platform/google"
 	"github.com/AmirAbaris/weeto-backend/internal/platform/crypto"
+	googleplatform "github.com/AmirAbaris/weeto-backend/internal/platform/google"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -26,6 +26,7 @@ func NewService(cfg *config.Config, q *db.Queries) *Service {
 	}
 }
 
+// generate a signed state and calls google login URL
 func (s *Service) ConnectURL(ctx context.Context, userID pgtype.UUID) (string, error) {
 	if err := s.requireConfigured(); err != nil {
 		return "", err
@@ -42,6 +43,7 @@ func (s *Service) ConnectURL(ctx context.Context, userID pgtype.UUID) (string, e
 	return s.oauth.AuthCodeURL(state), nil
 }
 
+// verify state and exchange datas and saves encrypted refresh token in db
 func (s *Service) HandleCallback(ctx context.Context, code, state string) (pgtype.UUID, error) {
 	if err := s.requireConfigured(); err != nil {
 		return pgtype.UUID{}, err
@@ -60,15 +62,17 @@ func (s *Service) HandleCallback(ctx context.Context, code, state string) (pgtyp
 		return pgtype.UUID{}, err
 	}
 
+	// encrypt refresh token to save it in db
 	encrypted, err := crypto.Encrypt([]byte(result.RefreshToken), s.cfg.TokenEncryptionKey)
 	if err != nil {
 		return pgtype.UUID{}, err
 	}
 
+	// save google data in db
 	if err := s.q.SetUserGoogleConnection(ctx, db.SetUserGoogleConnectionParams{
-		ID:                  userID,
-		GoogleID:            pgtype.Text{String: result.GoogleID, Valid: true},
-		GoogleRefreshToken:  pgtype.Text{String: encrypted, Valid: true},
+		ID:                 userID,
+		GoogleID:           pgtype.Text{String: result.GoogleID, Valid: true},
+		GoogleRefreshToken: pgtype.Text{String: encrypted, Valid: true},
 	}); err != nil {
 		return pgtype.UUID{}, err
 	}
@@ -76,6 +80,7 @@ func (s *Service) HandleCallback(ctx context.Context, code, state string) (pgtyp
 	return userID, nil
 }
 
+// remove google data in db
 func (s *Service) Disconnect(ctx context.Context, userID pgtype.UUID) error {
 	if !userID.Valid {
 		return errors.New("invalid user")
