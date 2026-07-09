@@ -97,11 +97,9 @@ func formatTimeRange(start, end time.Time) string {
 func meetingDetailsHTML(meetLink, meetingLocation string) string {
 	var details strings.Builder
 	if meetLink != "" {
-		details.WriteString(fmt.Sprintf(
-			`<p><strong>لینک جلسه:</strong> <a href="%s">%s</a></p>`,
-			html.EscapeString(meetLink),
-			html.EscapeString(meetLink),
-		))
+		fmt.Fprintf(&details, `<p><strong>لینک جلسه:</strong> <a href="%s">%s</a></p>`,
+	html.EscapeString(meetLink),
+	html.EscapeString(meetLink))
 	}
 	if meetingLocation != "" {
 		details.WriteString(fmt.Sprintf(
