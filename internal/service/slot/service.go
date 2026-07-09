@@ -166,12 +166,14 @@ func (s *Service) regenerateForType(
 		occupied[slot.StartAt.Time.UTC()] = struct{}{}
 	}
 
+	// max_per_day applies per interview type; org-wide counting blocked later types
+	// from getting any slots once an earlier type filled the day.
 	slotsPerDay := func(localDay time.Time) int32 {
 		dayStart, dayEnd := localDayBounds(localDay, avail.loc)
-		count, err := q.CountSlotsByOrgOnLocalDay(ctx, db.CountSlotsByOrgOnLocalDayParams{
-			OrganizationID: orgID,
-			StartAt:        timestamptz(dayStart),
-			StartAt_2:      timestamptz(dayEnd),
+		count, err := q.CountSlotsByTypeOnLocalDay(ctx, db.CountSlotsByTypeOnLocalDayParams{
+			InterviewTypeID: it.ID,
+			StartAt:         timestamptz(dayStart),
+			StartAt_2:       timestamptz(dayEnd),
 		})
 		if err != nil {
 			return avail.maxDay

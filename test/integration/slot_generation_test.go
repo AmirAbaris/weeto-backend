@@ -221,6 +221,28 @@ func TestSlotGenerationBookedSlotPreserved(t *testing.T) {
 	}
 }
 
+func TestSlotGenerationSecondInterviewType(t *testing.T) {
+	loc := tehran(t)
+	now := mondayMorningTehran(t)
+	env := NewTestEnv(t, now)
+
+	first := env.CreateInterviewType(60, 0)
+	env.UpsertAvailability(fixtures.Monday9to17(8))
+
+	second := env.CreateInterviewType(60, 0)
+
+	day := time.Date(2026, 7, 6, 0, 0, 0, 0, loc)
+	firstSlots := env.SlotsOnLocalDay(first.ID, day, loc)
+	if len(firstSlots) != 8 {
+		t.Fatalf("first type: got %d slots, want 8", len(firstSlots))
+	}
+
+	secondSlots := env.SlotsOnLocalDay(second.ID, day, loc)
+	if len(secondSlots) != 8 {
+		t.Fatalf("second type: got %d slots, want 8", len(secondSlots))
+	}
+}
+
 func TestSlotGenerationInterviewTypeBufferChange(t *testing.T) {
 	loc := tehran(t)
 	now := mondayMorningTehran(t)

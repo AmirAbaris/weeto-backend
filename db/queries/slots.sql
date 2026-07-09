@@ -55,6 +55,13 @@ WHERE organization_id = $1
   AND start_at >= $2
   AND start_at < $3;
 
+-- name: CountSlotsByTypeOnLocalDay :one
+SELECT COUNT(*)::int AS slot_count
+FROM slots
+WHERE interview_type_id = $1
+  AND start_at >= $2
+  AND start_at < $3;
+
 -- name: ListAvailableSlotsByType :many
 SELECT *
 FROM slots

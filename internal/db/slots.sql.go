@@ -40,6 +40,27 @@ func (q *Queries) CountSlotsByOrgOnLocalDay(ctx context.Context, arg CountSlotsB
 	return slot_count, err
 }
 
+const countSlotsByTypeOnLocalDay = `-- name: CountSlotsByTypeOnLocalDay :one
+SELECT COUNT(*)::int AS slot_count
+FROM slots
+WHERE interview_type_id = $1
+  AND start_at >= $2
+  AND start_at < $3
+`
+
+type CountSlotsByTypeOnLocalDayParams struct {
+	InterviewTypeID pgtype.UUID        `json:"interview_type_id"`
+	StartAt         pgtype.Timestamptz `json:"start_at"`
+	StartAt_2       pgtype.Timestamptz `json:"start_at_2"`
+}
+
+func (q *Queries) CountSlotsByTypeOnLocalDay(ctx context.Context, arg CountSlotsByTypeOnLocalDayParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countSlotsByTypeOnLocalDay, arg.InterviewTypeID, arg.StartAt, arg.StartAt_2)
+	var slot_count int32
+	err := row.Scan(&slot_count)
+	return slot_count, err
+}
+
 const deleteUnbookedSlotsByOrgInWindow = `-- name: DeleteUnbookedSlotsByOrgInWindow :exec
 DELETE FROM slots AS s
 WHERE s.organization_id = $1
