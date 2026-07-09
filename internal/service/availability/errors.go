@@ -8,6 +8,7 @@ var (
 	ErrOrgRequired           = errors.New("organization required")
 	ErrInvalidTimezone       = errors.New("invalid timezone")
 	ErrInvalidMaxPerDay      = errors.New("invalid max_interviews_per_day")
+	ErrInvalidBookingHorizon = errors.New("invalid booking_horizon_days")
 	ErrInvalidDayOfWeek      = errors.New("invalid day_of_week")
 	ErrInvalidTimeRange      = errors.New("invalid time range")
 	ErrOverlappingHours      = errors.New("overlapping working hours")

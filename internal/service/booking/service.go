@@ -468,10 +468,16 @@ func (s *Service) slotWindow(ctx context.Context, orgID pgtype.UUID) (time.Time,
 		return time.Time{}, time.Time{}, err
 	}
 
+	horizonDays := int32(slotsvc.DefaultWindowDays)
+	settings, err := s.q.GetAvailabilitySettingsByOrg(ctx, orgID)
+	if err == nil && settings.BookingHorizonDays > 0 {
+		horizonDays = settings.BookingHorizonDays
+	} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return time.Time{}, time.Time{}, err
+	}
+
 	now := s.slotSvc.Now()
-	todayStart := startOfDay(now, loc)
-	start := maxTime(now.UTC(), todayStart)
-	end := todayStart.AddDate(0, 0, slotsvc.DefaultWindowDays)
+	start, end := slotsvc.BookingWindow(now, loc, int(horizonDays))
 	return start, end, nil
 }
 
@@ -567,13 +573,6 @@ func defaultLocation() *time.Location {
 func startOfDay(t time.Time, loc *time.Location) time.Time {
 	y, m, d := t.In(loc).Date()
 	return time.Date(y, m, d, 0, 0, 0, 0, loc)
-}
-
-func maxTime(a, b time.Time) time.Time {
-	if a.After(b) {
-		return a
-	}
-	return b
 }
 
 func isUniqueViolation(err error) bool {

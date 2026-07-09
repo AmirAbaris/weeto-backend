@@ -150,6 +150,47 @@ func TestSlotGenerationRollingWindow(t *testing.T) {
 	}
 }
 
+func TestSlotGenerationCustomHorizon(t *testing.T) {
+	loc := tehran(t)
+	now := mondayMorningTehran(t)
+	env := NewTestEnv(t, now)
+
+	it := env.CreateInterviewType(60, 0)
+	env.UpsertAvailability(fixtures.WithHorizon(fixtures.Monday9to17(50), 3))
+
+	all := env.ListSlots(it.ID)
+	windowEnd := time.Date(2026, 7, 9, 0, 0, 0, 0, loc)
+	for _, slot := range all {
+		if !slot.StartAt.Time.Before(windowEnd) {
+			t.Fatalf("slot beyond 3-day window: %v", slot.StartAt.Time)
+		}
+	}
+}
+
+func TestSlotGenerationHorizonShrink(t *testing.T) {
+	loc := tehran(t)
+	now := mondayMorningTehran(t)
+	env := NewTestEnv(t, now)
+
+	it := env.CreateInterviewType(60, 0)
+	env.UpsertAvailability(fixtures.Monday9to17(50))
+
+	before := env.ListSlots(it.ID)
+	if len(before) == 0 {
+		t.Fatal("expected slots before horizon shrink")
+	}
+
+	env.UpsertAvailability(fixtures.WithHorizon(fixtures.Monday9to17(50), 3))
+
+	after := env.ListSlots(it.ID)
+	windowEnd := time.Date(2026, 7, 9, 0, 0, 0, 0, loc)
+	for _, slot := range after {
+		if !slot.StartAt.Time.Before(windowEnd) {
+			t.Fatalf("slot beyond shrunk horizon: %v", slot.StartAt.Time)
+		}
+	}
+}
+
 func TestSlotGenerationBookedSlotPreserved(t *testing.T) {
 	loc := tehran(t)
 	now := mondayMorningTehran(t)

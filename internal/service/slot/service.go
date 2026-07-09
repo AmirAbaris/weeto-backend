@@ -85,11 +85,12 @@ func (s *Service) RegenerateForType(
 }
 
 type availabilitySnapshot struct {
-	loc     *time.Location
-	maxDay  int32
-	hours   []WorkingHour
-	breaks  []Break
-	timeOff []TimeOff
+	loc          *time.Location
+	maxDay       int32
+	horizonDays  int32
+	hours        []WorkingHour
+	breaks       []Break
+	timeOff      []TimeOff
 }
 
 func (s *Service) loadAvailability(ctx context.Context, q *db.Queries, orgID pgtype.UUID) (availabilitySnapshot, error) {
@@ -120,11 +121,12 @@ func (s *Service) loadAvailability(ctx context.Context, q *db.Queries, orgID pgt
 	}
 
 	return availabilitySnapshot{
-		loc:     loc,
-		maxDay:  settings.MaxInterviewsPerDay,
-		hours:   workingHoursFromDB(wh),
-		breaks:  breaksFromDB(br),
-		timeOff: timeOffFromDB(to),
+		loc:         loc,
+		maxDay:      settings.MaxInterviewsPerDay,
+		horizonDays: settings.BookingHorizonDays,
+		hours:       workingHoursFromDB(wh),
+		breaks:      breaksFromDB(br),
+		timeOff:     timeOffFromDB(to),
 	}, nil
 }
 
@@ -136,7 +138,11 @@ func (s *Service) regenerateForType(
 	avail availabilitySnapshot,
 ) error {
 	now := s.Now()
-	windowStart, windowEnd := regenWindow(now, avail.loc, DefaultWindowDays)
+	horizonDays := int(avail.horizonDays)
+	if horizonDays <= 0 {
+		horizonDays = DefaultWindowDays
+	}
+	windowStart, windowEnd := regenWindow(now, avail.loc, horizonDays)
 
 	if err := q.DeleteUnbookedSlotsByTypeInWindow(ctx, db.DeleteUnbookedSlotsByTypeInWindowParams{
 		InterviewTypeID: it.ID,
@@ -175,7 +181,7 @@ func (s *Service) regenerateForType(
 
 	candidates := Generate(GenerateParams{
 		Now:                 now,
-		WindowDays:          DefaultWindowDays,
+		WindowDays:          horizonDays,
 		Location:            avail.loc,
 		MaxInterviewsPerDay: avail.maxDay,
 		WorkingHours:        avail.hours,
@@ -187,7 +193,10 @@ func (s *Service) regenerateForType(
 		OccupiedStarts:      occupied,
 	})
 	if len(candidates) == 0 {
-		return nil
+		return q.DeleteUnbookedSlotsByTypeAfter(ctx, db.DeleteUnbookedSlotsByTypeAfterParams{
+			InterviewTypeID: it.ID,
+			StartAt:         timestamptz(windowEnd),
+		})
 	}
 
 	rows := make([]db.BulkInsertSlotsParams, 0, len(candidates))
@@ -201,7 +210,14 @@ func (s *Service) regenerateForType(
 	}
 
 	_, err = q.BulkInsertSlots(ctx, rows)
-	return err
+	if err != nil {
+		return err
+	}
+
+	return q.DeleteUnbookedSlotsByTypeAfter(ctx, db.DeleteUnbookedSlotsByTypeAfterParams{
+		InterviewTypeID: it.ID,
+		StartAt:         timestamptz(windowEnd),
+	})
 }
 
 func workingHoursFromDB(rows []db.AvailabilityWorkingHour) []WorkingHour {

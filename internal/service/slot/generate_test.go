@@ -322,6 +322,53 @@ func TestGenerateRespectsExistingDayCount(t *testing.T) {
 	}
 }
 
+func TestGenerateThreeDayWindow(t *testing.T) {
+	loc := tehranLoc(t)
+	now := mondayNineAMTehran(t)
+
+	candidates := Generate(GenerateParams{
+		Now:                 now,
+		WindowDays:          3,
+		Location:            loc,
+		MaxInterviewsPerDay: 99,
+		WorkingHours: []WorkingHour{
+			{DayOfWeek: 1, Start: clock(9, 0), End: clock(17, 0)},
+			{DayOfWeek: 2, Start: clock(9, 0), End: clock(17, 0)},
+			{DayOfWeek: 3, Start: clock(9, 0), End: clock(17, 0)},
+			{DayOfWeek: 4, Start: clock(9, 0), End: clock(17, 0)},
+			{DayOfWeek: 5, Start: clock(9, 0), End: clock(17, 0)},
+		},
+		DurationMinutes: 60,
+		BufferMinutes:   0,
+	})
+
+	_, windowEnd := BookingWindow(now, loc, 3)
+	for _, c := range candidates {
+		if !c.StartAt.Before(windowEnd) {
+			t.Fatalf("slot beyond 3-day window: %v", c.StartAt)
+		}
+	}
+}
+
+func TestBookingWindow(t *testing.T) {
+	loc := tehranLoc(t)
+	now := time.Date(2026, 7, 6, 15, 0, 0, 0, loc)
+
+	start, end := BookingWindow(now, loc, 14)
+	todayStart := startOfDay(now, loc)
+	wantEnd := todayStart.AddDate(0, 0, 14)
+	if !end.Equal(wantEnd) {
+		t.Fatalf("end = %v, want %v", end, wantEnd)
+	}
+	if start.Before(now.UTC()) {
+		t.Fatalf("start %v before now", start)
+	}
+	if !start.Equal(now.UTC()) && !start.Equal(todayStart) {
+		t.Fatalf("unexpected start %v", start)
+	}
+	_ = loc
+}
+
 func TestDurationFromClock(t *testing.T) {
 	d, err := DurationFromClock("09:30")
 	if err != nil {

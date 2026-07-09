@@ -46,6 +46,11 @@ func Tuesday9to17(maxPerDay int32) availabilitysvc.Input {
 	}
 }
 
+func WithHorizon(in availabilitysvc.Input, days int32) availabilitysvc.Input {
+	in.BookingHorizonDays = days
+	return in
+}
+
 func WithTimeOff(in availabilitysvc.Input, startAt, endAt string) availabilitysvc.Input {
 	in.TimeOff = append(in.TimeOff, availabilitysvc.TimeOffInput{
 		StartAt: startAt,

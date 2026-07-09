@@ -1283,6 +1283,13 @@ components:
           minimum: 1
           maximum: 50
           example: 4
+        booking_horizon_days:
+          type: integer
+          minimum: 1
+          maximum: 90
+          default: 14
+          example: 14
+          description: How many calendar days ahead candidates can book (from today in org timezone).
         working_hours:
           type: array
           items:
@@ -1298,11 +1305,13 @@ components:
 
     AvailabilityResponse:
       type: object
-      required: [timezone, max_interviews_per_day, working_hours, breaks, time_off]
+      required: [timezone, max_interviews_per_day, booking_horizon_days, working_hours, breaks, time_off]
       properties:
         timezone:
           type: string
         max_interviews_per_day:
+          type: integer
+        booking_horizon_days:
           type: integer
         working_hours:
           type: array

@@ -18,6 +18,15 @@ WHERE s.interview_type_id = $1
     SELECT 1 FROM booking b WHERE b.slot_id = s.id
   );
 
+-- name: DeleteUnbookedSlotsByTypeAfter :exec
+DELETE FROM slots AS s
+WHERE s.interview_type_id = $1
+  AND s.booked = FALSE
+  AND s.start_at >= $2
+  AND NOT EXISTS (
+    SELECT 1 FROM booking b WHERE b.slot_id = s.id
+  );
+
 -- name: InsertSlot :one
 INSERT INTO slots (
     organization_id,

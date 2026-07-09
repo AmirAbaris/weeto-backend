@@ -123,6 +123,14 @@ func Generate(p GenerateParams) []SlotCandidate {
 }
 
 func regenWindow(now time.Time, loc *time.Location, days int) (start, end time.Time) {
+	return BookingWindow(now, loc, days)
+}
+
+// BookingWindow returns the bookable UTC range [start, end) for a horizon of calendar days.
+func BookingWindow(now time.Time, loc *time.Location, days int) (start, end time.Time) {
+	if days <= 0 {
+		days = DefaultWindowDays
+	}
 	todayStart := startOfDay(now, loc)
 	start = maxTime(now.UTC(), todayStart)
 	end = todayStart.AddDate(0, 0, days)

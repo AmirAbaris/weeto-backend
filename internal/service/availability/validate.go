@@ -6,8 +6,11 @@ import (
 )
 
 const (
-	minMaxPerDay = 1
-	maxMaxPerDay = 50
+	minMaxPerDay         = 1
+	maxMaxPerDay         = 50
+	minBookingHorizon    = 1
+	maxBookingHorizon    = 90
+	defaultBookingHorizon = 14
 )
 
 type WorkingHourInput struct {
@@ -30,6 +33,7 @@ type TimeOffInput struct {
 type Input struct {
 	Timezone            string
 	MaxInterviewsPerDay int32
+	BookingHorizonDays  int32
 	WorkingHours        []WorkingHourInput
 	Breaks              []BreakInput
 	TimeOff             []TimeOffInput
@@ -53,6 +57,13 @@ func validateInput(in Input) (Input, *time.Location, []parsedTimeOff, error) {
 
 	if in.MaxInterviewsPerDay < minMaxPerDay || in.MaxInterviewsPerDay > maxMaxPerDay {
 		return Input{}, nil, nil, ErrInvalidMaxPerDay
+	}
+
+	if in.BookingHorizonDays == 0 {
+		in.BookingHorizonDays = defaultBookingHorizon
+	}
+	if in.BookingHorizonDays < minBookingHorizon || in.BookingHorizonDays > maxBookingHorizon {
+		return Input{}, nil, nil, ErrInvalidBookingHorizon
 	}
 
 	hoursByDay, err := parseAndValidateHours(in.WorkingHours)

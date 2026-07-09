@@ -2,13 +2,15 @@
 INSERT INTO availability_settings (
     organization_id,
     timezone,
-    max_interviews_per_day
+    max_interviews_per_day,
+    booking_horizon_days
 )
-VALUES ($1, $2, $3)
+VALUES ($1, $2, $3, $4)
 ON CONFLICT (organization_id) DO UPDATE
 SET
     timezone = EXCLUDED.timezone,
     max_interviews_per_day = EXCLUDED.max_interviews_per_day,
+    booking_horizon_days = EXCLUDED.booking_horizon_days,
     updated_at = NOW();
 
 -- name: DeleteWorkingHoursByOrg :exec
@@ -78,6 +80,7 @@ SELECT
     s.organization_id,
     s.timezone,
     s.max_interviews_per_day,
+    s.booking_horizon_days,
     s.updated_at,
     COALESCE((
         SELECT json_agg(

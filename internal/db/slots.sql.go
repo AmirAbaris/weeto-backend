@@ -62,6 +62,26 @@ func (q *Queries) DeleteUnbookedSlotsByOrgInWindow(ctx context.Context, arg Dele
 	return err
 }
 
+const deleteUnbookedSlotsByTypeAfter = `-- name: DeleteUnbookedSlotsByTypeAfter :exec
+DELETE FROM slots AS s
+WHERE s.interview_type_id = $1
+  AND s.booked = FALSE
+  AND s.start_at >= $2
+  AND NOT EXISTS (
+    SELECT 1 FROM booking b WHERE b.slot_id = s.id
+  )
+`
+
+type DeleteUnbookedSlotsByTypeAfterParams struct {
+	InterviewTypeID pgtype.UUID        `json:"interview_type_id"`
+	StartAt         pgtype.Timestamptz `json:"start_at"`
+}
+
+func (q *Queries) DeleteUnbookedSlotsByTypeAfter(ctx context.Context, arg DeleteUnbookedSlotsByTypeAfterParams) error {
+	_, err := q.db.Exec(ctx, deleteUnbookedSlotsByTypeAfter, arg.InterviewTypeID, arg.StartAt)
+	return err
+}
+
 const deleteUnbookedSlotsByTypeInWindow = `-- name: DeleteUnbookedSlotsByTypeInWindow :exec
 DELETE FROM slots AS s
 WHERE s.interview_type_id = $1

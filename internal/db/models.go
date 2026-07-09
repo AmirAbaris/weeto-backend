@@ -239,6 +239,7 @@ type AvailabilitySetting struct {
 	Timezone            string             `json:"timezone"`
 	MaxInterviewsPerDay int32              `json:"max_interviews_per_day"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	BookingHorizonDays  int32              `json:"booking_horizon_days"`
 }
 
 type AvailabilityTimeOff struct {

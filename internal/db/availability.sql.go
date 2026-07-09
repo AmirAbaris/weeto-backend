@@ -46,6 +46,7 @@ SELECT
     s.organization_id,
     s.timezone,
     s.max_interviews_per_day,
+    s.booking_horizon_days,
     s.updated_at,
     COALESCE((
         SELECT json_agg(
@@ -94,6 +95,7 @@ type GetAvailabilityByOrgRow struct {
 	OrganizationID      pgtype.UUID        `json:"organization_id"`
 	Timezone            string             `json:"timezone"`
 	MaxInterviewsPerDay int32              `json:"max_interviews_per_day"`
+	BookingHorizonDays  int32              `json:"booking_horizon_days"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 	WorkingHours        interface{}        `json:"working_hours"`
 	Breaks              interface{}        `json:"breaks"`
@@ -107,6 +109,7 @@ func (q *Queries) GetAvailabilityByOrg(ctx context.Context, organizationID pgtyp
 		&i.OrganizationID,
 		&i.Timezone,
 		&i.MaxInterviewsPerDay,
+		&i.BookingHorizonDays,
 		&i.UpdatedAt,
 		&i.WorkingHours,
 		&i.Breaks,
@@ -116,7 +119,7 @@ func (q *Queries) GetAvailabilityByOrg(ctx context.Context, organizationID pgtyp
 }
 
 const getAvailabilitySettingsByOrg = `-- name: GetAvailabilitySettingsByOrg :one
-SELECT organization_id, timezone, max_interviews_per_day, updated_at
+SELECT organization_id, timezone, max_interviews_per_day, updated_at, booking_horizon_days
 FROM availability_settings
 WHERE organization_id = $1
 `
@@ -129,6 +132,7 @@ func (q *Queries) GetAvailabilitySettingsByOrg(ctx context.Context, organization
 		&i.Timezone,
 		&i.MaxInterviewsPerDay,
 		&i.UpdatedAt,
+		&i.BookingHorizonDays,
 	)
 	return i, err
 }
@@ -318,13 +322,15 @@ const upsertAvailabilitySettings = `-- name: UpsertAvailabilitySettings :exec
 INSERT INTO availability_settings (
     organization_id,
     timezone,
-    max_interviews_per_day
+    max_interviews_per_day,
+    booking_horizon_days
 )
-VALUES ($1, $2, $3)
+VALUES ($1, $2, $3, $4)
 ON CONFLICT (organization_id) DO UPDATE
 SET
     timezone = EXCLUDED.timezone,
     max_interviews_per_day = EXCLUDED.max_interviews_per_day,
+    booking_horizon_days = EXCLUDED.booking_horizon_days,
     updated_at = NOW()
 `
 
@@ -332,9 +338,15 @@ type UpsertAvailabilitySettingsParams struct {
 	OrganizationID      pgtype.UUID `json:"organization_id"`
 	Timezone            string      `json:"timezone"`
 	MaxInterviewsPerDay int32       `json:"max_interviews_per_day"`
+	BookingHorizonDays  int32       `json:"booking_horizon_days"`
 }
 
 func (q *Queries) UpsertAvailabilitySettings(ctx context.Context, arg UpsertAvailabilitySettingsParams) error {
-	_, err := q.db.Exec(ctx, upsertAvailabilitySettings, arg.OrganizationID, arg.Timezone, arg.MaxInterviewsPerDay)
+	_, err := q.db.Exec(ctx, upsertAvailabilitySettings,
+		arg.OrganizationID,
+		arg.Timezone,
+		arg.MaxInterviewsPerDay,
+		arg.BookingHorizonDays,
+	)
 	return err
 }

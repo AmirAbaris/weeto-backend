@@ -38,6 +38,7 @@ type timeOffRequest struct {
 type availabilityRequest struct {
 	Timezone            string               `json:"timezone"`
 	MaxInterviewsPerDay int32                `json:"max_interviews_per_day"`
+	BookingHorizonDays  int32                `json:"booking_horizon_days"`
 	WorkingHours        []workingHourRequest `json:"working_hours"`
 	Breaks              []breakRequest       `json:"breaks"`
 	TimeOff             []timeOffRequest     `json:"time_off"`
@@ -67,6 +68,7 @@ type timeOffResponse struct {
 type availabilityResponse struct {
 	Timezone            string                `json:"timezone"`
 	MaxInterviewsPerDay int32                 `json:"max_interviews_per_day"`
+	BookingHorizonDays  int32                 `json:"booking_horizon_days"`
 	WorkingHours        []workingHourResponse `json:"working_hours"`
 	Breaks              []breakResponse       `json:"breaks"`
 	TimeOff             []timeOffResponse     `json:"time_off"`
@@ -115,6 +117,7 @@ func toInput(req availabilityRequest) availabilitysvc.Input {
 	in := availabilitysvc.Input{
 		Timezone:            req.Timezone,
 		MaxInterviewsPerDay: req.MaxInterviewsPerDay,
+		BookingHorizonDays:  req.BookingHorizonDays,
 		WorkingHours:        make([]availabilitysvc.WorkingHourInput, 0, len(req.WorkingHours)),
 		Breaks:              make([]availabilitysvc.BreakInput, 0, len(req.Breaks)),
 		TimeOff:             make([]availabilitysvc.TimeOffInput, 0, len(req.TimeOff)),
@@ -146,6 +149,7 @@ func toResponse(view availabilitysvc.View) availabilityResponse {
 	resp := availabilityResponse{
 		Timezone:            view.Timezone,
 		MaxInterviewsPerDay: view.MaxInterviewsPerDay,
+		BookingHorizonDays:  view.BookingHorizonDays,
 		WorkingHours:        make([]workingHourResponse, 0, len(view.WorkingHours)),
 		Breaks:              make([]breakResponse, 0, len(view.Breaks)),
 		TimeOff:             make([]timeOffResponse, 0, len(view.TimeOff)),
@@ -188,6 +192,7 @@ func writeServiceError(w http.ResponseWriter, err error) {
 		httputil.WriteError(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, availabilitysvc.ErrInvalidTimezone),
 		errors.Is(err, availabilitysvc.ErrInvalidMaxPerDay),
+		errors.Is(err, availabilitysvc.ErrInvalidBookingHorizon),
 		errors.Is(err, availabilitysvc.ErrInvalidDayOfWeek),
 		errors.Is(err, availabilitysvc.ErrInvalidTimeRange),
 		errors.Is(err, availabilitysvc.ErrOverlappingHours),

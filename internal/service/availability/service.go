@@ -33,6 +33,7 @@ func NewService(pool *pgxpool.Pool, q *db.Queries, orgSvc *orgsvc.Service, slotS
 type View struct {
 	Timezone            string
 	MaxInterviewsPerDay int32
+	BookingHorizonDays  int32
 	WorkingHours        []WorkingHourView
 	Breaks              []BreakView
 	TimeOff             []TimeOffView
@@ -90,6 +91,7 @@ func (s *Service) Upsert(ctx context.Context, ownerID pgtype.UUID, in Input) (Vi
 		OrganizationID:      org.ID,
 		Timezone:            in.Timezone,
 		MaxInterviewsPerDay: in.MaxInterviewsPerDay,
+		BookingHorizonDays:  in.BookingHorizonDays,
 	}); err != nil {
 		return View{}, err
 	}
@@ -208,6 +210,7 @@ func buildView(
 	view := View{
 		Timezone:            settings.Timezone,
 		MaxInterviewsPerDay: settings.MaxInterviewsPerDay,
+		BookingHorizonDays:  settings.BookingHorizonDays,
 		WorkingHours:        make([]WorkingHourView, 0, len(wh)),
 		Breaks:              make([]BreakView, 0, len(br)),
 		TimeOff:             make([]TimeOffView, 0, len(to)),
