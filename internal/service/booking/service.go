@@ -12,6 +12,7 @@ import (
 
 	"github.com/AmirAbaris/weeto-backend/internal/db"
 	googleplatform "github.com/AmirAbaris/weeto-backend/internal/platform/google"
+	"github.com/AmirAbaris/weeto-backend/internal/plan"
 	orgsvc "github.com/AmirAbaris/weeto-backend/internal/service/organization"
 	slotsvc "github.com/AmirAbaris/weeto-backend/internal/service/slot"
 	"github.com/jackc/pgx/v5"
@@ -256,7 +257,7 @@ func (s *Service) finalizeGoogleMeetBooking(ctx context.Context, meta Metadata, 
 
 	if _, err := s.q.TryIncrementMeetLinksUsed(ctx, db.TryIncrementMeetLinksUsedParams{
 		ID:            meta.Organization.ID,
-		MeetLinksUsed: freePlanMaxMeetLinksPerMonth,
+		MeetLinksUsed: plan.MeetLinksLimitForIncrement(meta.Organization.Plan),
 	}); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			s.compensatingCancel(ctx, meta.Organization, booking)

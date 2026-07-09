@@ -202,7 +202,7 @@ func writeServiceError(w http.ResponseWriter, err error) {
 			Error:     err.Error(),
 			Code:      "plan_limit_interview_types",
 			Action:    "upgrade",
-			ActionURL: "/settings/billing",
+			ActionURL: "/dashboard/settings#plan",
 		})
 	case errors.Is(err, interviewtypesvc.ErrHasScheduledBookings):
 		httputil.WriteErrorDetail(w, http.StatusConflict, httputil.ErrorDetail{

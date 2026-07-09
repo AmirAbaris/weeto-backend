@@ -133,20 +133,20 @@ func (s *Service) UpdateOrg(ctx context.Context, id, ownerID pgtype.UUID, name, 
 	return updated, nil
 }
 
-func (s *Service) UpdatePlan(ctx context.Context, id pgtype.UUID, plan db.PlanType) (db.Organization, error) {
+func (s *Service) UpdatePlan(ctx context.Context, id pgtype.UUID, newPlan db.PlanType) (db.Organization, error) {
 	if !id.Valid {
 		return db.Organization{}, ErrInvalidOwner
 	}
-	if err := validatePlan(plan); err != nil {
+	if err := validatePlan(newPlan); err != nil {
 		return db.Organization{}, err
 	}
-	if plan == "" {
+	if newPlan == "" {
 		return db.Organization{}, ErrInvalidPlan
 	}
 
 	updated, err := s.q.UpdateOrganizationPlan(ctx, db.UpdateOrganizationPlanParams{
 		ID:   id,
-		Plan: plan,
+		Plan: newPlan,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

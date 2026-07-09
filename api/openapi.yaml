@@ -1054,9 +1054,46 @@ components:
       enum: [free, pro, business]
       example: free
 
+    UsageCounter:
+      type: object
+      required: [used, limit]
+      properties:
+        used:
+          type: integer
+          format: int32
+        limit:
+          type: integer
+          format: int32
+          nullable: true
+          description: Null means unlimited for paid plans.
+
+    MeetLinksUsage:
+      type: object
+      required: [used, limit]
+      properties:
+        used:
+          type: integer
+          format: int32
+        limit:
+          type: integer
+          format: int32
+          nullable: true
+        period_start:
+          type: string
+          format: date-time
+
+    OrganizationUsage:
+      type: object
+      required: [meet_links, interview_types]
+      properties:
+        meet_links:
+          $ref: "#/components/schemas/MeetLinksUsage"
+        interview_types:
+          $ref: "#/components/schemas/UsageCounter"
+
     OrganizationResponse:
       type: object
-      required: [id, name, slug, owner_id, plan, created_at, updated_at]
+      required: [id, name, slug, owner_id, plan, usage, created_at, updated_at]
       properties:
         id:
           type: string
@@ -1074,6 +1111,8 @@ components:
           format: uuid
         plan:
           $ref: "#/components/schemas/PlanType"
+        usage:
+          $ref: "#/components/schemas/OrganizationUsage"
         created_at:
           type: string
           format: date-time

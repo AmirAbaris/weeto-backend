@@ -265,8 +265,9 @@ func writeServiceError(w http.ResponseWriter, err error) {
 		})
 	case errors.Is(err, bookingsvc.ErrMeetLinkLimitReached):
 		httputil.WriteErrorDetail(w, http.StatusForbidden, httputil.ErrorDetail{
-			Error: err.Error(),
-			Code:  "plan_limit_meet_links",
+			Error:  err.Error(),
+			Code:   "plan_limit_meet_links",
+			Action: "contact",
 		})
 	case errors.Is(err, bookingsvc.ErrGoogleCalendarFailed):
 		httputil.WriteErrorDetail(w, http.StatusUnprocessableEntity, httputil.ErrorDetail{

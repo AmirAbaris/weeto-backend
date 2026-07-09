@@ -6,6 +6,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/AmirAbaris/weeto-backend/internal/db"
+	"github.com/AmirAbaris/weeto-backend/internal/plan"
 )
 
 const (
@@ -16,7 +17,7 @@ const (
 	maxDurationMins  = 480
 	minBufferMins    = 0
 	maxBufferMins    = 120
-	freePlanMaxTypes = 3
+	freePlanMaxTypes = plan.FreeMaxInterviewTypes
 )
 
 var slugPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)

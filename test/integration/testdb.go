@@ -263,6 +263,14 @@ func (e *TestEnv) SetMeetLinksUsed(count int32) {
 	}
 }
 
+func (e *TestEnv) SetMeetLinksPeriodStart(t time.Time) {
+	e.T.Helper()
+	_, err := e.Pool.Exec(e.Ctx, `UPDATE organization SET meet_links_period_start = $2 WHERE id = $1`, e.OrgID, t)
+	if err != nil {
+		e.T.Fatal(err)
+	}
+}
+
 func (e *TestEnv) ListSlots(typeID pgtype.UUID) []db.Slot {
 	e.T.Helper()
 	loc, err := time.LoadLocation("Asia/Tehran")
