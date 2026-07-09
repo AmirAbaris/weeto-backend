@@ -102,10 +102,8 @@ func meetingDetailsHTML(meetLink, meetingLocation string) string {
 	html.EscapeString(meetLink))
 	}
 	if meetingLocation != "" {
-		details.WriteString(fmt.Sprintf(
-			"<p><strong>محل برگزاری:</strong> %s</p>",
-			html.EscapeString(meetingLocation),
-		))
+		fmt.Fprintf(&details, "<p><strong>محل برگزاری:</strong> %s</p>",
+	html.EscapeString(meetingLocation))
 	}
 	return details.String()
 }
