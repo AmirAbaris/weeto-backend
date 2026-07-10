@@ -2,6 +2,7 @@ package availability
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -45,11 +46,11 @@ type availabilityRequest struct {
 }
 
 type workingHourResponse struct {
-	ID         string    `json:"id,omitempty"`
-	DayOfWeek  int16     `json:"day_of_week"`
-	StartTime  string    `json:"start_time"`
-	EndTime    string    `json:"end_time"`
-	CreatedAt  time.Time `json:"created_at,omitempty"`
+	ID        string    `json:"id,omitempty"`
+	DayOfWeek int16     `json:"day_of_week"`
+	StartTime string    `json:"start_time"`
+	EndTime   string    `json:"end_time"`
+	CreatedAt time.Time `json:"created_at,omitempty"`
 }
 
 type breakResponse struct {
@@ -83,13 +84,57 @@ func (h *Handler) Upsert(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req availabilityRequest
+	slog.Info("availability request decoded",
+		"timezone", req.Timezone,
+		"maxPerDay", req.MaxInterviewsPerDay,
+		"horizon", req.BookingHorizonDays,
+		"workingHoursCount", len(req.WorkingHours),
+	)
 	if err := httputil.DecodeJSON(r, &req); err != nil {
 		httputil.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
+	slog.Info(
+
+		"availability request decoded",
+
+		"timezone", req.Timezone,
+
+		"maxPerDay", req.MaxInterviewsPerDay,
+
+		"horizon", req.BookingHorizonDays,
+
+		"workingHoursCount", len(req.WorkingHours),
+
+		"breaksCount", len(req.Breaks),
+
+		"timeOffCount", len(req.TimeOff),
+	)
+
+	for i, h := range req.WorkingHours {
+		slog.Info("working hour",
+			"index", i,
+			"day", h.DayOfWeek,
+			"start", h.StartTime,
+			"end", h.EndTime,
+		)
+	}
+
+	for i, t := range req.TimeOff {
+		slog.Info("time off",
+			"index", i,
+			"start", t.StartAt,
+			"end", t.EndAt,
+		)
+	}
+
 	view, err := h.svc.Upsert(r.Context(), ownerID, toInput(req))
 	if err != nil {
+		slog.Error("availability upsert failed",
+
+			"error", err,
+		)
 		writeServiceError(w, err)
 		return
 	}
