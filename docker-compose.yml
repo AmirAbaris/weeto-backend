@@ -19,7 +19,7 @@ services:
       - ./db/migrations:/migrations
     environment:
       GOOSE_DRIVER: postgres
-      GOOSE_DBSTRING: postgres://weeto:weeto@postgres:5432/weeto?sslmode=disable
+      GOOSE_DBSTRING: postgres://weeto:thisisABA465082w@postgres:5432/weeto?sslmode=disable
       GOOSE_MIGRATION_DIR: /migrations
     depends_on:
       postgres:
