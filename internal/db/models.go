@@ -11,12 +11,53 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type BookingStatus string
+
+const (
+	BookingStatusScheduled BookingStatus = "scheduled"
+	BookingStatusCancelled BookingStatus = "cancelled"
+)
+
+func (e *BookingStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = BookingStatus(s)
+	case string:
+		*e = BookingStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for BookingStatus: %T", src)
+	}
+	return nil
+}
+
+type NullBookingStatus struct {
+	BookingStatus BookingStatus `json:"booking_status"`
+	Valid         bool          `json:"valid"` // Valid is true if BookingStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullBookingStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.BookingStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.BookingStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullBookingStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.BookingStatus), nil
+}
+
 type MeetingProvider string
 
 const (
 	MeetingProviderGoogleMeet MeetingProvider = "google_meet"
-	MeetingProviderBaleLink   MeetingProvider = "bale_link"
-	MeetingProviderCustomUrl  MeetingProvider = "custom_url"
+	MeetingProviderOnSite     MeetingProvider = "on_site"
 )
 
 func (e *MeetingProvider) Scan(src interface{}) error {
@@ -52,6 +93,94 @@ func (ns NullMeetingProvider) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.MeetingProvider), nil
+}
+
+type NotificationEventType string
+
+const (
+	NotificationEventTypeBookingCreated     NotificationEventType = "booking_created"
+	NotificationEventTypeBookingRescheduled NotificationEventType = "booking_rescheduled"
+	NotificationEventTypeBookingCancelled   NotificationEventType = "booking_cancelled"
+	NotificationEventTypeReminder24h        NotificationEventType = "reminder_24h"
+)
+
+func (e *NotificationEventType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = NotificationEventType(s)
+	case string:
+		*e = NotificationEventType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for NotificationEventType: %T", src)
+	}
+	return nil
+}
+
+type NullNotificationEventType struct {
+	NotificationEventType NotificationEventType `json:"notification_event_type"`
+	Valid                 bool                  `json:"valid"` // Valid is true if NotificationEventType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullNotificationEventType) Scan(value interface{}) error {
+	if value == nil {
+		ns.NotificationEventType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.NotificationEventType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullNotificationEventType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.NotificationEventType), nil
+}
+
+type NotificationStatus string
+
+const (
+	NotificationStatusPending   NotificationStatus = "pending"
+	NotificationStatusSent      NotificationStatus = "sent"
+	NotificationStatusFailed    NotificationStatus = "failed"
+	NotificationStatusCancelled NotificationStatus = "cancelled"
+)
+
+func (e *NotificationStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = NotificationStatus(s)
+	case string:
+		*e = NotificationStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for NotificationStatus: %T", src)
+	}
+	return nil
+}
+
+type NullNotificationStatus struct {
+	NotificationStatus NotificationStatus `json:"notification_status"`
+	Valid              bool               `json:"valid"` // Valid is true if NotificationStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullNotificationStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.NotificationStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.NotificationStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullNotificationStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.NotificationStatus), nil
 }
 
 type PlanType string
@@ -97,6 +226,55 @@ func (ns NullPlanType) Value() (driver.Value, error) {
 	return string(ns.PlanType), nil
 }
 
+type AvailabilityBreak struct {
+	ID             pgtype.UUID `json:"id"`
+	OrganizationID pgtype.UUID `json:"organization_id"`
+	DayOfWeek      int16       `json:"day_of_week"`
+	StartTime      pgtype.Time `json:"start_time"`
+	EndTime        pgtype.Time `json:"end_time"`
+}
+
+type AvailabilitySetting struct {
+	OrganizationID      pgtype.UUID        `json:"organization_id"`
+	Timezone            string             `json:"timezone"`
+	MaxInterviewsPerDay int32              `json:"max_interviews_per_day"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	BookingHorizonDays  int32              `json:"booking_horizon_days"`
+}
+
+type AvailabilityTimeOff struct {
+	ID             pgtype.UUID        `json:"id"`
+	OrganizationID pgtype.UUID        `json:"organization_id"`
+	EndAt          pgtype.Timestamptz `json:"end_at"`
+	StartAt        pgtype.Timestamptz `json:"start_at"`
+}
+
+type AvailabilityWorkingHour struct {
+	ID             pgtype.UUID        `json:"id"`
+	OrganizationID pgtype.UUID        `json:"organization_id"`
+	DayOfWeek      int16              `json:"day_of_week"`
+	StartTime      pgtype.Time        `json:"start_time"`
+	EndTime        pgtype.Time        `json:"end_time"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
+type Booking struct {
+	ID              pgtype.UUID        `json:"id"`
+	OrganizationID  pgtype.UUID        `json:"organization_id"`
+	InterviewTypeID pgtype.UUID        `json:"interview_type_id"`
+	SlotID          pgtype.UUID        `json:"slot_id"`
+	CandidateName   string             `json:"candidate_name"`
+	CandidatePhone  string             `json:"candidate_phone"`
+	CandidateEmail  string             `json:"candidate_email"`
+	Status          BookingStatus      `json:"status"`
+	MeetLink        pgtype.Text        `json:"meet_link"`
+	CalendarEventID pgtype.Text        `json:"calendar_event_id"`
+	RescheduleToken string             `json:"reschedule_token"`
+	CancelToken     string             `json:"cancel_token"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
 type InterviewType struct {
 	ID              pgtype.UUID        `json:"id"`
 	OrganizationID  pgtype.UUID        `json:"organization_id"`
@@ -110,15 +288,29 @@ type InterviewType struct {
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
+type NotificationOutbox struct {
+	ID             pgtype.UUID           `json:"id"`
+	OrganizationID pgtype.UUID           `json:"organization_id"`
+	EventType      NotificationEventType `json:"event_type"`
+	Payload        []byte                `json:"payload"`
+	Status         NotificationStatus    `json:"status"`
+	RetryCount     int32                 `json:"retry_count"`
+	CreatedAt      pgtype.Timestamptz    `json:"created_at"`
+	ProcessedAt    pgtype.Timestamptz    `json:"processed_at"`
+	ScheduledAt    pgtype.Timestamptz    `json:"scheduled_at"`
+}
+
 type Organization struct {
-	ID        pgtype.UUID        `json:"id"`
-	Name      string             `json:"name"`
-	Slug      string             `json:"slug"`
-	LogoUrl   pgtype.Text        `json:"logo_url"`
-	OwnerID   pgtype.UUID        `json:"owner_id"`
-	Plan      PlanType           `json:"plan"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	ID                   pgtype.UUID        `json:"id"`
+	Name                 string             `json:"name"`
+	Slug                 string             `json:"slug"`
+	LogoUrl              pgtype.Text        `json:"logo_url"`
+	OwnerID              pgtype.UUID        `json:"owner_id"`
+	Plan                 PlanType           `json:"plan"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	MeetLinksUsed        int32              `json:"meet_links_used"`
+	MeetLinksPeriodStart pgtype.Timestamptz `json:"meet_links_period_start"`
 }
 
 type RefreshToken struct {
@@ -130,12 +322,24 @@ type RefreshToken struct {
 	RevokedAt pgtype.Timestamptz `json:"revoked_at"`
 }
 
+type Slot struct {
+	ID              pgtype.UUID        `json:"id"`
+	OrganizationID  pgtype.UUID        `json:"organization_id"`
+	InterviewTypeID pgtype.UUID        `json:"interview_type_id"`
+	StartAt         pgtype.Timestamptz `json:"start_at"`
+	EndAt           pgtype.Timestamptz `json:"end_at"`
+	Booked          bool               `json:"booked"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
 type User struct {
-	ID                pgtype.UUID        `json:"id"`
-	Email             string             `json:"email"`
-	PasswordHash      string             `json:"password_hash"`
-	LastLoginAt       pgtype.Timestamptz `json:"last_login_at"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
-	GoogleConnectedAt pgtype.Timestamptz `json:"google_connected_at"`
+	ID                 pgtype.UUID        `json:"id"`
+	Email              string             `json:"email"`
+	PasswordHash       string             `json:"password_hash"`
+	LastLoginAt        pgtype.Timestamptz `json:"last_login_at"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+	GoogleConnectedAt  pgtype.Timestamptz `json:"google_connected_at"`
+	GoogleID           pgtype.Text        `json:"google_id"`
+	GoogleRefreshToken pgtype.Text        `json:"google_refresh_token"`
 }

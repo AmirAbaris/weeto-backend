@@ -30,7 +30,14 @@ SET
     name = $2,
     slug = $3,
     logo_url = $4,
-    plan = $5,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING *;
+
+-- name: UpdateOrganizationPlan :one
+UPDATE organization
+SET
+    plan = $2,
     updated_at = NOW()
 WHERE id = $1
 RETURNING *;
@@ -53,3 +60,28 @@ SELECT EXISTS (
     FROM organization
     WHERE slug = $1
 );
+
+-- name: ResetMeetLinksPeriodIfNeeded :exec
+UPDATE organization
+SET
+    meet_links_used = 0,
+    meet_links_period_start = NOW(),
+    updated_at = NOW()
+WHERE id = $1
+  AND date_trunc('month', NOW()) > date_trunc('month', meet_links_period_start);
+
+-- name: TryIncrementMeetLinksUsed :one
+UPDATE organization
+SET
+    meet_links_used = meet_links_used + 1,
+    updated_at = NOW()
+WHERE id = $1
+  AND (plan != 'free' OR meet_links_used < $2)
+RETURNING meet_links_used;
+
+-- name: DecrementMeetLinksUsed :exec
+UPDATE organization
+SET
+    meet_links_used = GREATEST(meet_links_used - 1, 0),
+    updated_at = NOW()
+WHERE id = $1;

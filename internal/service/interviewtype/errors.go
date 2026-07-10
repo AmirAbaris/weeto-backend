@@ -15,4 +15,5 @@ var (
 	ErrOrgRequired             = errors.New("organization required")
 	ErrPlanLimitInterviewTypes = errors.New("free plan allows up to 3 interview types")
 	ErrGoogleNotConnected      = errors.New("connect google to use google meet interview types")
+	ErrHasScheduledBookings    = errors.New("interview type has scheduled bookings")
 )

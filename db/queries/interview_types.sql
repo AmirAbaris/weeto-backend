@@ -46,3 +46,18 @@ SELECT EXISTS (
     FROM interview_type
     WHERE organization_id = $1 AND slug = $2
 );
+
+-- name: GetInterviewTypeByOrgAndSlug :one
+SELECT *
+FROM interview_type
+WHERE organization_id = $1 AND slug = $2;
+
+-- name: CountScheduledBookingsByInterviewType :one
+SELECT COUNT(*)::int
+FROM booking
+WHERE interview_type_id = $1
+  AND status = 'scheduled';
+
+-- name: DeleteInterviewType :exec
+DELETE FROM interview_type
+WHERE id = $1;

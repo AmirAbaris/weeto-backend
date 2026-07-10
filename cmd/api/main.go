@@ -13,15 +13,26 @@ import (
 	"github.com/AmirAbaris/weeto-backend/internal/config"
 	"github.com/AmirAbaris/weeto-backend/internal/db"
 	authhandler "github.com/AmirAbaris/weeto-backend/internal/handler/auth"
+	adminhandler "github.com/AmirAbaris/weeto-backend/internal/handler/admin"
 	docshandler "github.com/AmirAbaris/weeto-backend/internal/handler/docs"
 	"github.com/AmirAbaris/weeto-backend/internal/handler/health"
 	orghandler "github.com/AmirAbaris/weeto-backend/internal/handler/organization"
+	availabilityhandler "github.com/AmirAbaris/weeto-backend/internal/handler/availability"
 	interviewtypehandler "github.com/AmirAbaris/weeto-backend/internal/handler/interviewtype"
+	bookinghandler "github.com/AmirAbaris/weeto-backend/internal/handler/booking"
+	googlehandler "github.com/AmirAbaris/weeto-backend/internal/handler/google"
+	publichandler "github.com/AmirAbaris/weeto-backend/internal/handler/public"
 	"github.com/AmirAbaris/weeto-backend/internal/middleware"
 	applogger "github.com/AmirAbaris/weeto-backend/internal/platform/logger"
+	googleplatform "github.com/AmirAbaris/weeto-backend/internal/platform/google"
+	"github.com/AmirAbaris/weeto-backend/internal/server"
 	authsvc "github.com/AmirAbaris/weeto-backend/internal/service/auth"
+	availabilitysvc "github.com/AmirAbaris/weeto-backend/internal/service/availability"
+	bookingsvc "github.com/AmirAbaris/weeto-backend/internal/service/booking"
+	googlesvc "github.com/AmirAbaris/weeto-backend/internal/service/google"
 	orgsvc "github.com/AmirAbaris/weeto-backend/internal/service/organization"
 	interviewtypesvc "github.com/AmirAbaris/weeto-backend/internal/service/interviewtype"
+	slotsvc "github.com/AmirAbaris/weeto-backend/internal/service/slot"
 	"github.com/joho/godotenv"
 )
 
@@ -54,28 +65,32 @@ func main() {
 	authHandler := authhandler.NewHandler(authService)
 	orgService := orgsvc.NewService(queries, cfg)
 	orgHandler := orghandler.NewHandler(orgService)
-	interviewTypeService := interviewtypesvc.NewService(queries, orgService)
+	adminHandler := adminhandler.NewHandler(orgService)
+	slotService := slotsvc.NewService(queries)
+	interviewTypeService := interviewtypesvc.NewService(queries, orgService, slotService)
 	interviewTypeHandler := interviewtypehandler.NewHandler(interviewTypeService)
+	availabilityService := availabilitysvc.NewService(pool, queries, orgService, slotService)
+	availabilityHandler := availabilityhandler.NewHandler(availabilityService)
+	googleCalendar := googleplatform.NewCalendarClient(cfg, queries)
+	googleService := googlesvc.NewService(cfg, queries)
+	googleHandler := googlehandler.NewHandler(cfg, googleService)
+	bookingService := bookingsvc.NewService(pool, queries, orgService, slotService, googleCalendar)
+	bookingHandler := bookinghandler.NewHandler(bookingService)
+	publicHandler := publichandler.NewHandler(bookingService)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /docs", docsHandler.UI)
-	mux.HandleFunc("GET /openapi.yaml", docsHandler.Spec)
-	mux.HandleFunc("GET /health", healthHandler.Live)
-	mux.HandleFunc("POST /auth/register", authHandler.Register)
-	mux.HandleFunc("POST /auth/login", authHandler.Login)
-	mux.HandleFunc("POST /auth/refresh", authHandler.Refresh)
-	mux.HandleFunc("POST /auth/logout", authHandler.Logout)
-
-	mux.Handle("POST /organizations", middleware.WithAuth(cfg.JWTSecret, orgHandler.Create))
-	mux.Handle("GET /organizations/me", middleware.WithAuth(cfg.JWTSecret, orgHandler.GetMine))
-	mux.Handle("GET /organizations/{id}", middleware.WithAuth(cfg.JWTSecret, orgHandler.GetByID))
-	mux.Handle("PUT /organizations/{id}", middleware.WithAuth(cfg.JWTSecret, orgHandler.Update))
-	mux.Handle("PATCH /organizations/{id}/logo", middleware.WithAuth(cfg.JWTSecret, orgHandler.UpdateLogo))
-	mux.Handle("DELETE /organizations/{id}", middleware.WithAuth(cfg.JWTSecret, orgHandler.Delete))
-
-	mux.Handle("POST /interview-types", middleware.WithAuth(cfg.JWTSecret, interviewTypeHandler.Create))
-	mux.Handle("GET /interview-types", middleware.WithAuth(cfg.JWTSecret, interviewTypeHandler.List))
-	mux.Handle("PUT /interview-types/{id}", middleware.WithAuth(cfg.JWTSecret, interviewTypeHandler.Update))
+	server.Register(mux, cfg.JWTSecret, cfg.AdminAPIKey, server.Handlers{
+		Health:        healthHandler,
+		Docs:          docsHandler,
+		Auth:          authHandler,
+		Admin:         adminHandler,
+		Organization:  orgHandler,
+		InterviewType: interviewTypeHandler,
+		Availability:  availabilityHandler,
+		Booking:       bookingHandler,
+		Public:        publicHandler,
+		Google:        googleHandler,
+	})
 
 	handler := middleware.RequestID(
 		middleware.Logging(logger, middleware.LoggingOptions{
@@ -85,14 +100,14 @@ func main() {
 		})(mux),
 	)
 
-	server := &http.Server{
+	httpServer := &http.Server{
 		Addr:    ":" + cfg.Port,
 		Handler: handler,
 	}
 
 	go func() {
 		slog.Info("server starting", "port", cfg.Port, "env", cfg.Env)
-		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("server failed", "err", err)
 			os.Exit(1)
 		}
@@ -104,7 +119,7 @@ func main() {
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := server.Shutdown(shutdownCtx); err != nil {
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		slog.Error("shutdown", "err", err)
 	}
 }

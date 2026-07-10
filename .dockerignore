@@ -1,0 +1,15 @@
+.git
+.gitignore
+tmp/
+bin/
+dist/
+test/
+.env
+.env.*
+*.md
+.idea/
+.vscode/
+.DS_Store
+*.log
+build-errors.log
+.cursor/

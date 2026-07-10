@@ -154,7 +154,7 @@ Secondary seams:
 
 - **User** — recruiter account; `email` + `password_hash` (required for auth); optional `google_id` and encrypted `google_refresh_token` after explicit Google connect (Calendar/Meet only).
 - **Organization** — company workspace; slug for public URLs; plan tier and usage counters (`meet_links_used`, `sms_used`, `plan_expires_at`).
-- **InterviewType** — title, slug, duration, buffer, meeting provider (`google_meet` | `bale_link` | `custom_url`), optional static meeting URL for non-Google providers.
+- **InterviewType** — title, slug, duration, buffer, meeting provider (`google_meet` | `on_site`), optional address text on interview type for on-site meetings.
 - **AvailabilityRule** — working hours, breaks, max interviews per day, manual time-off blocks.
 - **Slot** — generated bookable time window (`timestamptz` UTC); `booked` flag or derived from booking existence.
 - **Booking** — candidate name, phone, email; links to slot and interview type; status (`scheduled` | `cancelled`); `meet_link`; Google Calendar event ID; signed `reschedule_token` and `cancel_token`.
@@ -192,10 +192,7 @@ Google OAuth is **not** used for signup or login. Recruiters always authenticate
 | Provider | Behavior | Target segment |
 |----------|----------|----------------|
 | `google_meet` | Auto-created via recruiter's Google Calendar | Tech startups |
-| `bale_link` | Recruiter provides Bale room URL on interview type | Banks, gov, no-VPN orgs |
-| `custom_url` | Recruiter provides any meeting URL | Fallback |
-
-Bale API auto-generation is out of scope for v1; manual URL field is sufficient.
+| `on_site` | Recruiter provides address on interview type | In-person interviews |
 
 ### Reschedule & cancel (magic links)
 

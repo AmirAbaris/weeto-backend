@@ -25,6 +25,11 @@ type Config struct {
 
 	TokenEncryptionKey  []byte // 32 bytes for AES-256
 	SessionCookieSecure bool
+
+	ResendAPIKey string
+	ResendFrom   string
+
+	AdminAPIKey string
 }
 
 func LoadConfig() (*Config, error) {
@@ -55,6 +60,9 @@ func LoadConfig() (*Config, error) {
 		GoogleRedirectURL:   os.Getenv("GOOGLE_REDIRECT_URL"),
 		TokenEncryptionKey:  encKey,
 		SessionCookieSecure: parseBool(os.Getenv("SESSION_COOKIE_SECURE")),
+		ResendAPIKey:        os.Getenv("RESEND_TOKEN_KEY"),
+		ResendFrom:          getEnv("RESEND_FROM", getEnv("SMTP_FROM", "Weeto <noreply@weeto.ir>")),
+		AdminAPIKey:         os.Getenv("ADMIN_API_KEY"),
 	}
 	if cfg.DBURL == "" {
 		return nil, errors.New("DB_URL is required")
