@@ -3,7 +3,7 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: weeto
-      POSTGRES_PASSWORD: weeto
+      POSTGRES_PASSWORD: thisisABA465082w
       POSTGRES_DB: weeto
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -34,8 +34,6 @@ services:
       - "8080:8080"
     env_file:
       - .env
-    environment:
-      DB_URL: postgres://weeto:weeto@postgres:5432/weeto?sslmode=disable
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -52,8 +50,6 @@ services:
       target: worker
     env_file:
       - .env
-    environment:
-      DB_URL: postgres://weeto:weeto@postgres:5432/weeto?sslmode=disable
     depends_on:
       migrate:
         condition: service_completed_successfully
