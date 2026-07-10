@@ -15,7 +15,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /worker ./cmd/worker
 FROM alpine:3.21 AS api
 
 RUN sed -i 's#https://dl-cdn.alpinelinux.org/alpine#https://mirrors.aliyun.com/alpine#g' /etc/apk/repositories \
-    && apk add --no-cache ca-certificates wget
+    && apk add --no-cache ca-certificates wget tzdata
 
 COPY --from=builder /api /api
 EXPOSE 8080
@@ -30,7 +30,7 @@ ENTRYPOINT ["/api"]
 FROM alpine:3.21 AS worker
 
 RUN sed -i 's#https://dl-cdn.alpinelinux.org/alpine#https://mirrors.aliyun.com/alpine#g' /etc/apk/repositories \
-    && apk add --no-cache ca-certificates
+    && apk add --no-cache ca-certificates tzdata
 
 COPY --from=builder /worker /worker
 USER nobody
