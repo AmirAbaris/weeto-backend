@@ -1,9 +1,7 @@
 # builder: compile static linux binary
 FROM golang:1.26-alpine AS builder
-RUN go env -w GOPROXY=https://goproxy.cn,direct
 WORKDIR /app
 COPY go.mod go.sum ./
-RUN apk add --no-cache git
 RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /api ./cmd/api
