@@ -1,5 +1,7 @@
 # builder: compile static linux binary
 FROM golang:1.26-alpine AS builder
+RUN sed -i 's#https://dl-cdn.alpinelinux.org/alpine#https://mirrors.aliyun.com/alpine#g' /etc/apk/repositories \
+    && apk add --no-cache git
 RUN go env -w GOPROXY=https://goproxy.cn,direct
 WORKDIR /app
 COPY go.mod go.sum ./
