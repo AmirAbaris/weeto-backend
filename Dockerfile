@@ -21,10 +21,6 @@ COPY --from=builder /api /api
 EXPOSE 8080
 USER nobody
 ENTRYPOINT ["/api"]
-COPY --from=builder /api /api
-EXPOSE 8080
-USER nobody
-ENTRYPOINT ["/api"]
 
 # worker: notification outbox processor
 FROM alpine:3.21 AS worker
@@ -32,9 +28,6 @@ FROM alpine:3.21 AS worker
 RUN sed -i 's#https://dl-cdn.alpinelinux.org/alpine#https://mirrors.aliyun.com/alpine#g' /etc/apk/repositories \
     && apk add --no-cache ca-certificates tzdata
 
-COPY --from=builder /worker /worker
-USER nobody
-ENTRYPOINT ["/worker"]
 COPY --from=builder /worker /worker
 USER nobody
 ENTRYPOINT ["/worker"]
