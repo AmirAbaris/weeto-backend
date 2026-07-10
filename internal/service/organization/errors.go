@@ -10,5 +10,5 @@ var (
 	ErrInvalidName      = errors.New("invalid organization name")
 	ErrInvalidSlug      = errors.New("invalid slug")
 	ErrInvalidPlan      = errors.New("invalid plan")
-	ErrInvalidOwner     = errors.New("invalid owner")
+	ErrInvalidOwner = errors.New("invalid owner")
 )

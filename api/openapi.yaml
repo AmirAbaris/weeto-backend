@@ -24,6 +24,14 @@ tags:
     description: Recruiter organization management
   - name: InterviewTypes
     description: Interview type configuration
+  - name: Availability
+    description: Recruiter availability and slot generation rules
+  - name: Bookings
+    description: Recruiter booking management
+  - name: Integrations
+    description: Third-party integrations (Google Calendar)
+  - name: Public
+    description: Public candidate booking (no authentication)
 
 paths:
   /health:
@@ -279,6 +287,44 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /admin/organizations/{id}/plan:
+    parameters:
+      - $ref: "#/components/parameters/OrganizationID"
+    patch:
+      tags: [Admin]
+      summary: Update organization plan (internal)
+      description: Requires ADMIN_API_KEY as Bearer token. Use for wishlist / early-access upgrades until billing is live.
+      operationId: adminUpdateOrganizationPlan
+      security:
+        - adminAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateOrganizationPlanRequest"
+      responses:
+        "200":
+          description: Plan updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          description: Admin API not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /organizations/{id}/logo:
     parameters:
       - $ref: "#/components/parameters/OrganizationID"
@@ -432,6 +478,429 @@ paths:
                 $ref: "#/components/schemas/ErrorDetail"
         "500":
           $ref: "#/components/responses/InternalError"
+    delete:
+      tags: [InterviewTypes]
+      summary: Delete an interview type
+      operationId: deleteInterviewType
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Interview type deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Interview type has scheduled bookings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDetail"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /availability:
+    put:
+      tags: [Availability]
+      summary: Replace organization availability settings
+      operationId: upsertAvailability
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AvailabilityRequest"
+      responses:
+        "200":
+          description: Availability saved and slots regenerated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AvailabilityResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Organization required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    get:
+      tags: [Availability]
+      summary: Get organization availability settings
+      operationId: getAvailability
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current availability configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AvailabilityResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Availability or organization not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /bookings:
+    get:
+      tags: [Bookings]
+      summary: List upcoming bookings
+      description: |
+        Returns scheduled bookings for the recruiter's organization, split into
+        today's interviews (org timezone) and upcoming future days.
+      operationId: listBookings
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Bookings grouped by today and upcoming
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookingListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Organization required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /bookings/{id}:
+    delete:
+      tags: [Bookings]
+      summary: Cancel a booking
+      description: Cancels a scheduled booking and frees the associated slot.
+      operationId: cancelBooking
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/BookingID"
+      responses:
+        "204":
+          description: Booking cancelled
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Booking not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /integrations/google/connect:
+    get:
+      tags: [Integrations]
+      summary: Start Google OAuth connect flow
+      description: Redirects the recruiter to Google to authorize Calendar access.
+      operationId: connectGoogle
+      security:
+        - bearerAuth: []
+      responses:
+        "302":
+          description: Redirect to Google OAuth consent screen
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          description: Google integration not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /integrations/google/callback:
+    get:
+      tags: [Integrations]
+      summary: Google OAuth callback
+      description: Exchanges authorization code for refresh token and redirects to the frontend.
+      operationId: googleOAuthCallback
+      parameters:
+        - name: code
+          in: query
+          schema:
+            type: string
+        - name: state
+          in: query
+          schema:
+            type: string
+        - name: error
+          in: query
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to frontend integrations settings page
+
+  /integrations/google:
+    delete:
+      tags: [Integrations]
+      summary: Disconnect Google account
+      operationId: disconnectGoogle
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Google account disconnected
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /public/{orgSlug}/{typeSlug}:
+    get:
+      tags: [Public]
+      summary: Get booking page metadata
+      operationId: getPublicBookingMetadata
+      parameters:
+        - name: orgSlug
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+        - name: typeSlug
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+      responses:
+        "200":
+          description: Organization and interview type metadata for the public booking page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicMetadataResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /public/{orgSlug}/{typeSlug}/slots:
+    get:
+      tags: [Public]
+      summary: List available booking slots
+      operationId: listPublicBookingSlots
+      parameters:
+        - name: orgSlug
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+        - name: typeSlug
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+      responses:
+        "200":
+          description: Available slots in ISO 8601 UTC
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicSlotsResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /public/{orgSlug}/{typeSlug}/book:
+    post:
+      tags: [Public]
+      summary: Book an interview slot
+      operationId: bookPublicSlot
+      parameters:
+        - name: orgSlug
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+        - name: typeSlug
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublicBookRequest"
+      responses:
+        "201":
+          description: Booking created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicBookResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Slot is no longer available (concurrent double-book)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Free plan Google Meet monthly limit reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDetail"
+        "422":
+          description: Google account not connected or calendar event creation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDetail"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /public/reschedule/{token}:
+    get:
+      tags: [Public]
+      summary: Get reschedule page context
+      operationId: getPublicRescheduleContext
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: Booking details, candidate prefill, and available slots
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicRescheduleContextResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags: [Public]
+      summary: Reschedule a booking to a new slot
+      operationId: reschedulePublicBooking
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublicRescheduleRequest"
+      responses:
+        "200":
+          description: Booking rescheduled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicBookResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Within cutoff window before interview start
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Slot is no longer available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /public/cancel/{token}:
+    get:
+      tags: [Public]
+      summary: Get cancel confirmation context
+      operationId: getPublicCancelContext
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: Booking details for cancel confirmation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicCancelContextResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags: [Public]
+      summary: Cancel a booking via magic link
+      operationId: cancelPublicBooking
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "204":
+          description: Booking cancelled
+        "403":
+          description: Within cutoff window before interview start
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
 components:
   securitySchemes:
@@ -442,6 +911,10 @@ components:
       description: |
         Access token from `POST /auth/register`, `POST /auth/login`, or `POST /auth/refresh`.
         Paste only the token value; Swagger UI adds the `Bearer` prefix.
+    adminAuth:
+      type: http
+      scheme: bearer
+      description: ADMIN_API_KEY value (not a user JWT)
     refreshTokenCookie:
       type: apiKey
       in: cookie
@@ -463,6 +936,15 @@ components:
       in: path
       required: true
       description: Interview type UUID
+      schema:
+        type: string
+        format: uuid
+
+    BookingID:
+      name: id
+      in: path
+      required: true
+      description: Booking UUID
       schema:
         type: string
         format: uuid
@@ -550,6 +1032,11 @@ components:
           type: string
           format: uri
           nullable: true
+
+    UpdateOrganizationPlanRequest:
+      type: object
+      required: [plan]
+      properties:
         plan:
           $ref: "#/components/schemas/PlanType"
 
@@ -567,9 +1054,46 @@ components:
       enum: [free, pro, business]
       example: free
 
+    UsageCounter:
+      type: object
+      required: [used, limit]
+      properties:
+        used:
+          type: integer
+          format: int32
+        limit:
+          type: integer
+          format: int32
+          nullable: true
+          description: Null means unlimited for paid plans.
+
+    MeetLinksUsage:
+      type: object
+      required: [used, limit]
+      properties:
+        used:
+          type: integer
+          format: int32
+        limit:
+          type: integer
+          format: int32
+          nullable: true
+        period_start:
+          type: string
+          format: date-time
+
+    OrganizationUsage:
+      type: object
+      required: [meet_links, interview_types]
+      properties:
+        meet_links:
+          $ref: "#/components/schemas/MeetLinksUsage"
+        interview_types:
+          $ref: "#/components/schemas/UsageCounter"
+
     OrganizationResponse:
       type: object
-      required: [id, name, slug, owner_id, plan, created_at, updated_at]
+      required: [id, name, slug, owner_id, plan, usage, created_at, updated_at]
       properties:
         id:
           type: string
@@ -587,6 +1111,8 @@ components:
           format: uuid
         plan:
           $ref: "#/components/schemas/PlanType"
+        usage:
+          $ref: "#/components/schemas/OrganizationUsage"
         created_at:
           type: string
           format: date-time
@@ -621,8 +1147,8 @@ components:
 
     MeetingProvider:
       type: string
-      enum: [google_meet, bale_link, custom_url]
-      example: bale_link
+      enum: [google_meet, on_site]
+      example: on_site
 
     InterviewTypeRequest:
       type: object
@@ -653,10 +1179,9 @@ components:
           $ref: "#/components/schemas/MeetingProvider"
         meeting_url:
           type: string
-          format: uri
           nullable: true
-          description: Required for bale_link and custom_url; must be omitted for google_meet
-          example: https://ble.ir/join/abc
+          description: Required for on_site (address text); must be omitted for google_meet
+          example: تهران، خیابان ولیعصر، پلاک ۱۲
 
     InterviewTypeResponse:
       type: object
@@ -697,6 +1222,396 @@ components:
         updated_at:
           type: string
           format: date-time
+
+    AvailabilityWorkingHour:
+      type: object
+      required: [day_of_week, start_time, end_time]
+      properties:
+        day_of_week:
+          type: integer
+          minimum: 0
+          maximum: 6
+          description: 0=Sunday through 6=Saturday
+          example: 1
+        start_time:
+          type: string
+          pattern: '^([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$'
+          example: "09:00"
+        end_time:
+          type: string
+          pattern: '^([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$'
+          example: "17:00"
+
+    AvailabilityBreak:
+      type: object
+      required: [day_of_week, start_time, end_time]
+      properties:
+        day_of_week:
+          type: integer
+          minimum: 0
+          maximum: 6
+        start_time:
+          type: string
+          example: "12:00"
+        end_time:
+          type: string
+          example: "13:00"
+
+    AvailabilityTimeOff:
+      type: object
+      required: [start_at, end_at]
+      properties:
+        start_at:
+          type: string
+          format: date-time
+          example: "2026-07-10T06:30:00Z"
+        end_at:
+          type: string
+          format: date-time
+          example: "2026-07-10T10:30:00Z"
+
+    AvailabilityRequest:
+      type: object
+      required: [max_interviews_per_day, working_hours]
+      properties:
+        timezone:
+          type: string
+          default: Asia/Tehran
+          example: Asia/Tehran
+        max_interviews_per_day:
+          type: integer
+          minimum: 1
+          maximum: 50
+          example: 4
+        booking_horizon_days:
+          type: integer
+          minimum: 1
+          maximum: 90
+          default: 14
+          example: 14
+          description: How many calendar days ahead candidates can book (from today in org timezone).
+        working_hours:
+          type: array
+          items:
+            $ref: "#/components/schemas/AvailabilityWorkingHour"
+        breaks:
+          type: array
+          items:
+            $ref: "#/components/schemas/AvailabilityBreak"
+        time_off:
+          type: array
+          items:
+            $ref: "#/components/schemas/AvailabilityTimeOff"
+
+    AvailabilityResponse:
+      type: object
+      required: [timezone, max_interviews_per_day, booking_horizon_days, working_hours, breaks, time_off]
+      properties:
+        timezone:
+          type: string
+        max_interviews_per_day:
+          type: integer
+        booking_horizon_days:
+          type: integer
+        working_hours:
+          type: array
+          items:
+            allOf:
+              - $ref: "#/components/schemas/AvailabilityWorkingHour"
+              - type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  created_at:
+                    type: string
+                    format: date-time
+        breaks:
+          type: array
+          items:
+            allOf:
+              - $ref: "#/components/schemas/AvailabilityBreak"
+              - type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+        time_off:
+          type: array
+          items:
+            allOf:
+              - $ref: "#/components/schemas/AvailabilityTimeOff"
+              - type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+        updated_at:
+          type: string
+          format: date-time
+
+    PublicOrganizationView:
+      type: object
+      required: [name, slug, plan]
+      properties:
+        name:
+          type: string
+          example: Acme Corp
+        slug:
+          type: string
+          example: acme-corp
+        logo_url:
+          type: string
+          format: uri
+          nullable: true
+        plan:
+          $ref: "#/components/schemas/PlanType"
+
+    PublicInterviewTypeView:
+      type: object
+      required: [title, slug, duration_minutes, buffer_minutes, meeting_provider]
+      properties:
+        title:
+          type: string
+          example: Technical Interview
+        slug:
+          type: string
+          example: technical
+        duration_minutes:
+          type: integer
+          example: 30
+        buffer_minutes:
+          type: integer
+          example: 0
+        meeting_provider:
+          type: string
+          enum: [google_meet, on_site]
+        meeting_location:
+          type: string
+          nullable: true
+          description: Present when meeting_provider is on_site
+
+    PublicMetadataResponse:
+      type: object
+      required: [organization, interview_type]
+      properties:
+        organization:
+          $ref: "#/components/schemas/PublicOrganizationView"
+        interview_type:
+          $ref: "#/components/schemas/PublicInterviewTypeView"
+
+    PublicSlot:
+      type: object
+      required: [id, start_at, end_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        start_at:
+          type: string
+          format: date-time
+          example: "2026-07-06T05:30:00Z"
+        end_at:
+          type: string
+          format: date-time
+          example: "2026-07-06T06:30:00Z"
+
+    PublicSlotsResponse:
+      type: object
+      required: [slots]
+      properties:
+        slots:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicSlot"
+
+    PublicBookRequest:
+      type: object
+      required: [slot_id, name, phone, email]
+      properties:
+        slot_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: Ali Rezaei
+        phone:
+          type: string
+          example: "+989121234567"
+        email:
+          type: string
+          format: email
+          example: ali@example.com
+
+    BookingItem:
+      type: object
+      required:
+        - id
+        - slot_id
+        - name
+        - phone
+        - email
+        - status
+        - start_at
+        - end_at
+        - interview_title
+      properties:
+        id:
+          type: string
+          format: uuid
+        slot_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+          format: email
+        status:
+          type: string
+          enum: [scheduled]
+        start_at:
+          type: string
+          format: date-time
+        end_at:
+          type: string
+          format: date-time
+        interview_title:
+          type: string
+
+    BookingListResponse:
+      type: object
+      required: [today, upcoming]
+      properties:
+        today:
+          type: array
+          items:
+            $ref: "#/components/schemas/BookingItem"
+        upcoming:
+          type: array
+          items:
+            $ref: "#/components/schemas/BookingItem"
+
+    PublicBookResponse:
+      type: object
+      required:
+        - id
+        - slot_id
+        - name
+        - phone
+        - email
+        - status
+        - start_at
+        - end_at
+        - interview_title
+        - organization_name
+      properties:
+        id:
+          type: string
+          format: uuid
+        slot_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+          format: email
+        status:
+          type: string
+          enum: [scheduled]
+        start_at:
+          type: string
+          format: date-time
+        end_at:
+          type: string
+          format: date-time
+        interview_title:
+          type: string
+        organization_name:
+          type: string
+        meet_link:
+          type: string
+          format: uri
+          description: Present when interview type uses google_meet and calendar event was created
+        meeting_location:
+          type: string
+          description: Present when interview type uses on_site
+
+    PublicModifyBookingView:
+      type: object
+      required: [id, name, phone, email, start_at, end_at, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+          format: email
+        start_at:
+          type: string
+          format: date-time
+        end_at:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [scheduled]
+
+    PublicRescheduleContextResponse:
+      type: object
+      required: [booking, organization, interview_type, current_slot, slots, can_modify, cutoff_hours]
+      properties:
+        booking:
+          $ref: "#/components/schemas/PublicModifyBookingView"
+        organization:
+          $ref: "#/components/schemas/PublicOrganizationView"
+        interview_type:
+          $ref: "#/components/schemas/PublicInterviewTypeView"
+        current_slot:
+          $ref: "#/components/schemas/PublicSlot"
+        slots:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicSlot"
+        can_modify:
+          type: boolean
+          description: False when within cutoff_hours of interview start
+        cutoff_hours:
+          type: integer
+          example: 4
+
+    PublicCancelContextResponse:
+      type: object
+      required: [booking, organization, interview_type, can_modify, cutoff_hours]
+      properties:
+        booking:
+          $ref: "#/components/schemas/PublicModifyBookingView"
+        organization:
+          $ref: "#/components/schemas/PublicOrganizationView"
+        interview_type:
+          $ref: "#/components/schemas/PublicInterviewTypeView"
+        can_modify:
+          type: boolean
+        cutoff_hours:
+          type: integer
+          example: 4
+
+    PublicRescheduleRequest:
+      type: object
+      required: [slot_id]
+      properties:
+        slot_id:
+          type: string
+          format: uuid
 
   responses:
     BadRequest:

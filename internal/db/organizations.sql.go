@@ -20,7 +20,7 @@ INSERT INTO organization (
     plan
 )
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, name, slug, logo_url, owner_id, plan, created_at, updated_at
+RETURNING id, name, slug, logo_url, owner_id, plan, created_at, updated_at, meet_links_used, meet_links_period_start
 `
 
 type CreateOrganizationParams struct {
@@ -49,8 +49,23 @@ func (q *Queries) CreateOrganization(ctx context.Context, arg CreateOrganization
 		&i.Plan,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MeetLinksUsed,
+		&i.MeetLinksPeriodStart,
 	)
 	return i, err
+}
+
+const decrementMeetLinksUsed = `-- name: DecrementMeetLinksUsed :exec
+UPDATE organization
+SET
+    meet_links_used = GREATEST(meet_links_used - 1, 0),
+    updated_at = NOW()
+WHERE id = $1
+`
+
+func (q *Queries) DecrementMeetLinksUsed(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, decrementMeetLinksUsed, id)
+	return err
 }
 
 const deleteOrganization = `-- name: DeleteOrganization :exec
@@ -64,7 +79,7 @@ func (q *Queries) DeleteOrganization(ctx context.Context, id pgtype.UUID) error 
 }
 
 const getOrganizationByID = `-- name: GetOrganizationByID :one
-SELECT id, name, slug, logo_url, owner_id, plan, created_at, updated_at
+SELECT id, name, slug, logo_url, owner_id, plan, created_at, updated_at, meet_links_used, meet_links_period_start
 FROM organization
 WHERE id = $1
 `
@@ -81,12 +96,14 @@ func (q *Queries) GetOrganizationByID(ctx context.Context, id pgtype.UUID) (Orga
 		&i.Plan,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MeetLinksUsed,
+		&i.MeetLinksPeriodStart,
 	)
 	return i, err
 }
 
 const getOrganizationBySlug = `-- name: GetOrganizationBySlug :one
-SELECT id, name, slug, logo_url, owner_id, plan, created_at, updated_at
+SELECT id, name, slug, logo_url, owner_id, plan, created_at, updated_at, meet_links_used, meet_links_period_start
 FROM organization
 WHERE slug = $1
 `
@@ -103,12 +120,14 @@ func (q *Queries) GetOrganizationBySlug(ctx context.Context, slug string) (Organ
 		&i.Plan,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MeetLinksUsed,
+		&i.MeetLinksPeriodStart,
 	)
 	return i, err
 }
 
 const getOrganizationsByOwner = `-- name: GetOrganizationsByOwner :one
-SELECT id, name, slug, logo_url, owner_id, plan, created_at, updated_at
+SELECT id, name, slug, logo_url, owner_id, plan, created_at, updated_at, meet_links_used, meet_links_period_start
 FROM organization
 WHERE owner_id = $1
 `
@@ -125,6 +144,8 @@ func (q *Queries) GetOrganizationsByOwner(ctx context.Context, ownerID pgtype.UU
 		&i.Plan,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MeetLinksUsed,
+		&i.MeetLinksPeriodStart,
 	)
 	return i, err
 }
@@ -144,16 +165,52 @@ func (q *Queries) OrganizationExistsBySlug(ctx context.Context, slug string) (bo
 	return exists, err
 }
 
+const resetMeetLinksPeriodIfNeeded = `-- name: ResetMeetLinksPeriodIfNeeded :exec
+UPDATE organization
+SET
+    meet_links_used = 0,
+    meet_links_period_start = NOW(),
+    updated_at = NOW()
+WHERE id = $1
+  AND date_trunc('month', NOW()) > date_trunc('month', meet_links_period_start)
+`
+
+func (q *Queries) ResetMeetLinksPeriodIfNeeded(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, resetMeetLinksPeriodIfNeeded, id)
+	return err
+}
+
+const tryIncrementMeetLinksUsed = `-- name: TryIncrementMeetLinksUsed :one
+UPDATE organization
+SET
+    meet_links_used = meet_links_used + 1,
+    updated_at = NOW()
+WHERE id = $1
+  AND (plan != 'free' OR meet_links_used < $2)
+RETURNING meet_links_used
+`
+
+type TryIncrementMeetLinksUsedParams struct {
+	ID            pgtype.UUID `json:"id"`
+	MeetLinksUsed int32       `json:"meet_links_used"`
+}
+
+func (q *Queries) TryIncrementMeetLinksUsed(ctx context.Context, arg TryIncrementMeetLinksUsedParams) (int32, error) {
+	row := q.db.QueryRow(ctx, tryIncrementMeetLinksUsed, arg.ID, arg.MeetLinksUsed)
+	var meet_links_used int32
+	err := row.Scan(&meet_links_used)
+	return meet_links_used, err
+}
+
 const updateOrganization = `-- name: UpdateOrganization :one
 UPDATE organization
 SET
     name = $2,
     slug = $3,
     logo_url = $4,
-    plan = $5,
     updated_at = NOW()
 WHERE id = $1
-RETURNING id, name, slug, logo_url, owner_id, plan, created_at, updated_at
+RETURNING id, name, slug, logo_url, owner_id, plan, created_at, updated_at, meet_links_used, meet_links_period_start
 `
 
 type UpdateOrganizationParams struct {
@@ -161,7 +218,6 @@ type UpdateOrganizationParams struct {
 	Name    string      `json:"name"`
 	Slug    string      `json:"slug"`
 	LogoUrl pgtype.Text `json:"logo_url"`
-	Plan    PlanType    `json:"plan"`
 }
 
 func (q *Queries) UpdateOrganization(ctx context.Context, arg UpdateOrganizationParams) (Organization, error) {
@@ -170,7 +226,6 @@ func (q *Queries) UpdateOrganization(ctx context.Context, arg UpdateOrganization
 		arg.Name,
 		arg.Slug,
 		arg.LogoUrl,
-		arg.Plan,
 	)
 	var i Organization
 	err := row.Scan(
@@ -182,6 +237,8 @@ func (q *Queries) UpdateOrganization(ctx context.Context, arg UpdateOrganization
 		&i.Plan,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MeetLinksUsed,
+		&i.MeetLinksPeriodStart,
 	)
 	return i, err
 }
@@ -192,7 +249,7 @@ SET
     logo_url = $2,
     updated_at = NOW()
 WHERE id = $1
-RETURNING id, name, slug, logo_url, owner_id, plan, created_at, updated_at
+RETURNING id, name, slug, logo_url, owner_id, plan, created_at, updated_at, meet_links_used, meet_links_period_start
 `
 
 type UpdateOrganizationLogoParams struct {
@@ -212,6 +269,40 @@ func (q *Queries) UpdateOrganizationLogo(ctx context.Context, arg UpdateOrganiza
 		&i.Plan,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MeetLinksUsed,
+		&i.MeetLinksPeriodStart,
+	)
+	return i, err
+}
+
+const updateOrganizationPlan = `-- name: UpdateOrganizationPlan :one
+UPDATE organization
+SET
+    plan = $2,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING id, name, slug, logo_url, owner_id, plan, created_at, updated_at, meet_links_used, meet_links_period_start
+`
+
+type UpdateOrganizationPlanParams struct {
+	ID   pgtype.UUID `json:"id"`
+	Plan PlanType    `json:"plan"`
+}
+
+func (q *Queries) UpdateOrganizationPlan(ctx context.Context, arg UpdateOrganizationPlanParams) (Organization, error) {
+	row := q.db.QueryRow(ctx, updateOrganizationPlan, arg.ID, arg.Plan)
+	var i Organization
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.LogoUrl,
+		&i.OwnerID,
+		&i.Plan,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.MeetLinksUsed,
+		&i.MeetLinksPeriodStart,
 	)
 	return i, err
 }

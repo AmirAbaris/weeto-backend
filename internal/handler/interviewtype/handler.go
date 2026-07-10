@@ -113,6 +113,27 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	httputil.WriteJSON(w, http.StatusOK, toResponse(item))
 }
 
+func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
+	ownerID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		httputil.WriteError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	id, err := parseUUID(r.PathValue("id"))
+	if err != nil {
+		httputil.WriteError(w, http.StatusBadRequest, "invalid interview type id")
+		return
+	}
+
+	if err := h.svc.Delete(r.Context(), id, ownerID); err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func toInput(req interviewTypeRequest) interviewtypesvc.Input {
 	return interviewtypesvc.Input{
 		Title:           req.Title,
@@ -181,7 +202,12 @@ func writeServiceError(w http.ResponseWriter, err error) {
 			Error:     err.Error(),
 			Code:      "plan_limit_interview_types",
 			Action:    "upgrade",
-			ActionURL: "/settings/billing",
+			ActionURL: "/dashboard/settings#plan",
+		})
+	case errors.Is(err, interviewtypesvc.ErrHasScheduledBookings):
+		httputil.WriteErrorDetail(w, http.StatusConflict, httputil.ErrorDetail{
+			Error: err.Error(),
+			Code:  "has_scheduled_bookings",
 		})
 	case errors.Is(err, interviewtypesvc.ErrInvalidTitle),
 		errors.Is(err, interviewtypesvc.ErrInvalidSlug),

@@ -11,6 +11,21 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const clearUserGoogleConnection = `-- name: ClearUserGoogleConnection :exec
+UPDATE users
+SET
+    google_id = NULL,
+    google_refresh_token = NULL,
+    google_connected_at = NULL,
+    updated_at = NOW()
+WHERE id = $1
+`
+
+func (q *Queries) ClearUserGoogleConnection(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, clearUserGoogleConnection, id)
+	return err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (email, password_hash)
 VALUES ($1, $2)
@@ -103,6 +118,25 @@ func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (GetUserByIDR
 	return i, err
 }
 
+const getUserGoogleCredentials = `-- name: GetUserGoogleCredentials :one
+SELECT google_id, google_refresh_token, google_connected_at
+FROM users
+WHERE id = $1
+`
+
+type GetUserGoogleCredentialsRow struct {
+	GoogleID           pgtype.Text        `json:"google_id"`
+	GoogleRefreshToken pgtype.Text        `json:"google_refresh_token"`
+	GoogleConnectedAt  pgtype.Timestamptz `json:"google_connected_at"`
+}
+
+func (q *Queries) GetUserGoogleCredentials(ctx context.Context, id pgtype.UUID) (GetUserGoogleCredentialsRow, error) {
+	row := q.db.QueryRow(ctx, getUserGoogleCredentials, id)
+	var i GetUserGoogleCredentialsRow
+	err := row.Scan(&i.GoogleID, &i.GoogleRefreshToken, &i.GoogleConnectedAt)
+	return i, err
+}
+
 const isGoogleConnected = `-- name: IsGoogleConnected :one
 SELECT (google_connected_at IS NOT NULL)::bool AS connected
 FROM users
@@ -114,6 +148,27 @@ func (q *Queries) IsGoogleConnected(ctx context.Context, id pgtype.UUID) (bool, 
 	var connected bool
 	err := row.Scan(&connected)
 	return connected, err
+}
+
+const setUserGoogleConnection = `-- name: SetUserGoogleConnection :exec
+UPDATE users
+SET
+    google_id = $2,
+    google_refresh_token = $3,
+    google_connected_at = NOW(),
+    updated_at = NOW()
+WHERE id = $1
+`
+
+type SetUserGoogleConnectionParams struct {
+	ID                 pgtype.UUID `json:"id"`
+	GoogleID           pgtype.Text `json:"google_id"`
+	GoogleRefreshToken pgtype.Text `json:"google_refresh_token"`
+}
+
+func (q *Queries) SetUserGoogleConnection(ctx context.Context, arg SetUserGoogleConnectionParams) error {
+	_, err := q.db.Exec(ctx, setUserGoogleConnection, arg.ID, arg.GoogleID, arg.GoogleRefreshToken)
+	return err
 }
 
 const touchLastLogin = `-- name: TouchLastLogin :exec

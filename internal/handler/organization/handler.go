@@ -3,10 +3,9 @@ package organization
 import (
 	"errors"
 	"net/http"
-	"time"
 
-	"github.com/AmirAbaris/weeto-backend/internal/db"
 	"github.com/AmirAbaris/weeto-backend/internal/handler/httputil"
+	"github.com/AmirAbaris/weeto-backend/internal/handler/orgresponse"
 	"github.com/AmirAbaris/weeto-backend/internal/middleware"
 	orgsvc "github.com/AmirAbaris/weeto-backend/internal/service/organization"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -27,25 +26,13 @@ type createOrgRequest struct {
 }
 
 type updateOrgRequest struct {
-	Name    string      `json:"name"`
-	Slug    string      `json:"slug"`
-	LogoURL *string     `json:"logo_url,omitempty"`
-	Plan    db.PlanType `json:"plan,omitempty"`
+	Name    string  `json:"name"`
+	Slug    string  `json:"slug"`
+	LogoURL *string `json:"logo_url,omitempty"`
 }
 
 type updateLogoRequest struct {
 	LogoURL string `json:"logo_url"`
-}
-
-type organizationResponse struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Slug      string    `json:"slug"`
-	LogoURL   *string   `json:"logo_url,omitempty"`
-	OwnerID   string    `json:"owner_id"`
-	Plan      string    `json:"plan"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
 }
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
@@ -67,7 +54,13 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputil.WriteJSON(w, http.StatusCreated, toOrganizationResponse(org))
+	usage, err := h.svc.UsageForOrg(r.Context(), org)
+	if err != nil {
+		httputil.WriteError(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	httputil.WriteJSON(w, http.StatusCreated, orgresponse.FromOrganization(org, usage))
 }
 
 func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
@@ -83,13 +76,13 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	org, err := h.svc.GetByID(r.Context(), id, ownerID)
+	org, err := h.svc.GetByIDWithUsage(r.Context(), id, ownerID)
 	if err != nil {
 		writeServiceError(w, err)
 		return
 	}
 
-	httputil.WriteJSON(w, http.StatusOK, toOrganizationResponse(org))
+	httputil.WriteJSON(w, http.StatusOK, orgresponse.FromWithUsage(org))
 }
 
 func (h *Handler) GetMine(w http.ResponseWriter, r *http.Request) {
@@ -99,13 +92,13 @@ func (h *Handler) GetMine(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	org, err := h.svc.GetByOwner(r.Context(), ownerID)
+	org, err := h.svc.GetByOwnerWithUsage(r.Context(), ownerID)
 	if err != nil {
 		writeServiceError(w, err)
 		return
 	}
 
-	httputil.WriteJSON(w, http.StatusOK, toOrganizationResponse(org))
+	httputil.WriteJSON(w, http.StatusOK, orgresponse.FromWithUsage(org))
 }
 
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
@@ -127,13 +120,19 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	org, err := h.svc.UpdateOrg(r.Context(), id, ownerID, req.Name, req.Slug, req.LogoURL, req.Plan)
+	org, err := h.svc.UpdateOrg(r.Context(), id, ownerID, req.Name, req.Slug, req.LogoURL)
 	if err != nil {
 		writeServiceError(w, err)
 		return
 	}
 
-	httputil.WriteJSON(w, http.StatusOK, toOrganizationResponse(org))
+	usage, err := h.svc.UsageForOrg(r.Context(), org)
+	if err != nil {
+		httputil.WriteError(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	httputil.WriteJSON(w, http.StatusOK, orgresponse.FromOrganization(org, usage))
 }
 
 func (h *Handler) UpdateLogo(w http.ResponseWriter, r *http.Request) {
@@ -161,7 +160,13 @@ func (h *Handler) UpdateLogo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputil.WriteJSON(w, http.StatusOK, toOrganizationResponse(org))
+	usage, err := h.svc.UsageForOrg(r.Context(), org)
+	if err != nil {
+		httputil.WriteError(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	httputil.WriteJSON(w, http.StatusOK, orgresponse.FromOrganization(org, usage))
 }
 
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
@@ -191,31 +196,6 @@ func parseUUID(s string) (pgtype.UUID, error) {
 		return pgtype.UUID{}, err
 	}
 	return id, nil
-}
-
-func toOrganizationResponse(org db.Organization) organizationResponse {
-	resp := organizationResponse{
-		Name: org.Name,
-		Slug: org.Slug,
-		Plan: string(org.Plan),
-	}
-	if org.ID.Valid {
-		resp.ID = org.ID.String()
-	}
-	if org.OwnerID.Valid {
-		resp.OwnerID = org.OwnerID.String()
-	}
-	if org.LogoUrl.Valid {
-		logo := org.LogoUrl.String
-		resp.LogoURL = &logo
-	}
-	if org.CreatedAt.Valid {
-		resp.CreatedAt = org.CreatedAt.Time
-	}
-	if org.UpdatedAt.Valid {
-		resp.UpdatedAt = org.UpdatedAt.Time
-	}
-	return resp
 }
 
 func writeServiceError(w http.ResponseWriter, err error) {

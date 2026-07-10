@@ -95,7 +95,7 @@ func (s *Service) GetByOwner(ctx context.Context, ownerID pgtype.UUID) (db.Organ
 	return org, nil
 }
 
-func (s *Service) UpdateOrg(ctx context.Context, id, ownerID pgtype.UUID, name, slug string, logoURL *string, plan db.PlanType) (db.Organization, error) {
+func (s *Service) UpdateOrg(ctx context.Context, id, ownerID pgtype.UUID, name, slug string, logoURL *string) (db.Organization, error) {
 	org, err := s.getOrgForOwner(ctx, id, ownerID)
 	if err != nil {
 		return db.Organization{}, err
@@ -104,13 +104,6 @@ func (s *Service) UpdateOrg(ctx context.Context, id, ownerID pgtype.UUID, name, 
 	name, slug, err = validateOrgFields(name, slug)
 	if err != nil {
 		return db.Organization{}, err
-	}
-
-	if err := validatePlan(plan); err != nil {
-		return db.Organization{}, err
-	}
-	if plan == "" {
-		plan = org.Plan
 	}
 
 	if slug != org.Slug {
@@ -129,11 +122,35 @@ func (s *Service) UpdateOrg(ctx context.Context, id, ownerID pgtype.UUID, name, 
 		Name:    name,
 		Slug:    slug,
 		LogoUrl: logo,
-		Plan:    plan,
 	})
 	if err != nil {
 		if isUniqueViolation(err) {
 			return db.Organization{}, mapUniqueViolation(err)
+		}
+		return db.Organization{}, err
+	}
+
+	return updated, nil
+}
+
+func (s *Service) UpdatePlan(ctx context.Context, id pgtype.UUID, newPlan db.PlanType) (db.Organization, error) {
+	if !id.Valid {
+		return db.Organization{}, ErrInvalidOwner
+	}
+	if err := validatePlan(newPlan); err != nil {
+		return db.Organization{}, err
+	}
+	if newPlan == "" {
+		return db.Organization{}, ErrInvalidPlan
+	}
+
+	updated, err := s.q.UpdateOrganizationPlan(ctx, db.UpdateOrganizationPlanParams{
+		ID:   id,
+		Plan: newPlan,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return db.Organization{}, ErrOrgNotFound
 		}
 		return db.Organization{}, err
 	}
