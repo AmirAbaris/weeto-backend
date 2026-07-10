@@ -11,7 +11,14 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /worker ./cmd/worker
 
 # api: minimal runtime (~15MB)
 FROM alpine:3.21 AS api
-RUN apk add --no-cache ca-certificates wget
+
+RUN sed -i 's#https://dl-cdn.alpinelinux.org/alpine#https://mirrors.aliyun.com/alpine#g' /etc/apk/repositories \
+    && apk add --no-cache ca-certificates wget
+
+COPY --from=builder /api /api
+EXPOSE 8080
+USER nobody
+ENTRYPOINT ["/api"]
 COPY --from=builder /api /api
 EXPOSE 8080
 USER nobody
@@ -19,7 +26,13 @@ ENTRYPOINT ["/api"]
 
 # worker: notification outbox processor
 FROM alpine:3.21 AS worker
-RUN apk add --no-cache ca-certificates
+
+RUN sed -i 's#https://dl-cdn.alpinelinux.org/alpine#https://mirrors.aliyun.com/alpine#g' /etc/apk/repositories \
+    && apk add --no-cache ca-certificates
+
+COPY --from=builder /worker /worker
+USER nobody
+ENTRYPOINT ["/worker"]
 COPY --from=builder /worker /worker
 USER nobody
 ENTRYPOINT ["/worker"]
